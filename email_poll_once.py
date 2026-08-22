@@ -39,7 +39,8 @@ def main():
     router = channels.Router(
         channels.WhatsAppChannel(), email_channel,
         preferred_conversation_channel="email")
-    model = email_model.EmailDemoModel()
+    model = email_model.EmailDemoModel(
+        intake_client=email_model.intake_client_from_env())
     eng = engine_mod.Engine(st, cl, model, router=router)
     poller = email_bridge.EmailPoller(
         eng, st, default_case_id=case_id, attachment_dir=attachment_dir)

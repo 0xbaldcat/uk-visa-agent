@@ -8,6 +8,8 @@ now use PDF/DOCX/image files once OCR text is available.
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 
 import document_extract
 import llm
@@ -20,15 +22,82 @@ QUOTE_CUTOFFS = [
 
 
 class EmailDemoModel(llm.StubModel):
-    def __init__(self, text_extractor=None):
+    def __init__(self, text_extractor=None, intake_client=None):
         super(EmailDemoModel, self).__init__()
         self.text_extractor = text_extractor or document_extract.LocalDocumentTextExtractor()
+        self.intake_client = intake_client
 
     def parse_reply(self, text, expected_slot, slot_spec):
         value = _clean(text)
         if slot_spec.get("type") == "enum":
             value = _normalise_enum(value, slot_spec.get("values", []))
         return llm.coerce_slot(value, slot_spec)
+
+    def parse_intake(self, text, slot_specs):
+        remote = {}
+        if self.intake_client is not None:
+            try:
+                remote = self.intake_client.parse_intake(text, slot_specs) or {}
+            except llm.ModelRefusal:
+                pass
+        cleaned = _clean(text)
+        raw = {}
+        wanted = set(spec["id"] for spec in slot_specs)
+        lower = cleaned.lower()
+
+        if "applicant_name" in wanted:
+            name = _extract_name(cleaned)
+            if name:
+                raw["applicant_name"] = name
+        if "nationality" in wanted:
+            nationality = _extract_nationality(cleaned)
+            if nationality:
+                raw["nationality"] = nationality
+        if "trip_start" in wanted or "trip_end" in wanted:
+            dates = _extract_dates(cleaned)
+            if "trip_start" in wanted and len(dates) >= 1:
+                raw["trip_start"] = dates[0]
+            if "trip_end" in wanted and len(dates) >= 2:
+                raw["trip_end"] = dates[1]
+        if "visit_purpose" in wanted:
+            purpose = _extract_visit_purpose(lower)
+            if purpose:
+                raw["visit_purpose"] = purpose
+        if "has_uk_settled_relative" in wanted:
+            relative = _extract_uk_relative(lower)
+            if relative is not None:
+                raw["has_uk_settled_relative"] = relative
+        if "employment_status" in wanted:
+            employment = _extract_employment(lower)
+            if employment:
+                raw["employment_status"] = employment
+        if "third_party_funding" in wanted:
+            funding = _extract_third_party_funding(lower)
+            if funding is not None:
+                raw["third_party_funding"] = funding
+        if "prior_uk_refusal" in wanted:
+            refusal = _extract_prior_refusal(lower)
+            if refusal is not None:
+                raw["prior_uk_refusal"] = refusal
+        if "estimated_trip_cost_gbp" in wanted:
+            cost = _extract_cost(lower)
+            if cost is not None:
+                raw["estimated_trip_cost_gbp"] = cost
+
+        coerced = {}
+        for spec in slot_specs:
+            slot_id = spec["id"]
+            if slot_id not in raw:
+                continue
+            try:
+                coerced[slot_id] = llm.coerce_slot(raw[slot_id], spec)
+            except llm.ModelRefusal:
+                continue
+        merged = dict(remote)
+        for slot_id, value in coerced.items():
+            if slot_id not in merged:
+                merged[slot_id] = value
+        return merged
 
     def extract_fields(self, document, wanted_fields):
         if os.path.exists(document) and document.endswith(".json"):
@@ -39,6 +108,90 @@ class EmailDemoModel(llm.StubModel):
             return document_extract.extract_fields_from_file(
                 document, wanted_fields, text_extractor=self.text_extractor)
         return super().extract_fields(document, wanted_fields)
+
+
+class ChatCompletionsIntakeClient(object):
+    """OpenAI-compatible JSON extractor for natural-language intake emails."""
+
+    def __init__(self, api_key, model, base_url="https://api.deepseek.com", timeout=20):
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+    def parse_intake(self, text, slot_specs):
+        wanted = [{
+            "id": spec["id"],
+            "type": spec.get("type", "text"),
+            "values": spec.get("values", []),
+            "prompt_hint": spec.get("prompt_hint"),
+        } for spec in slot_specs]
+        payload = {
+            "model": self.model,
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": (
+                    "Extract UK visitor visa intake facts from the user's email. "
+                    "Return only a JSON object. Include only fields that are explicitly "
+                    "stated or strongly implied. Do not invent missing values. "
+                    "Use the provided slot ids exactly.")},
+                {"role": "user", "content": json.dumps({
+                    "slots": wanted,
+                    "email": text,
+                }, ensure_ascii=False)},
+            ],
+        }
+        try:
+            req = urllib.request.Request(
+                self.base_url + "/chat/completions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": "Bearer " + self.api_key,
+                    "Content-Type": "application/json",
+                })
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                raw = json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, ValueError, KeyError) as exc:
+            raise llm.ModelRefusal("LLM intake parse failed: %s" % exc)
+        try:
+            content = raw["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise llm.ModelRefusal("LLM intake response was not JSON: %s" % exc)
+
+        allowed = dict((spec["id"], spec) for spec in slot_specs)
+        coerced = {}
+        for slot_id, value in parsed.items():
+            if slot_id not in allowed or value in (None, ""):
+                continue
+            try:
+                coerced[slot_id] = llm.coerce_slot(value, allowed[slot_id])
+            except llm.ModelRefusal:
+                continue
+        return coerced
+
+
+def intake_client_from_env():
+    api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        return None
+    model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
+    model = _normalise_model_name(model)
+    base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
+    return ChatCompletionsIntakeClient(api_key=api_key, model=model, base_url=base_url)
+
+
+def _normalise_model_name(model):
+    aliases = {
+        "v4flash": "deepseek-v4-flash",
+        "v4_flash": "deepseek-v4-flash",
+        "deepseek-v4flash": "deepseek-v4-flash",
+        "v4pro": "deepseek-v4-pro",
+        "v4_pro": "deepseek-v4-pro",
+    }
+    key = re.sub(r"[^a-z0-9]+", "_", str(model or "").lower()).strip("_")
+    return aliases.get(key, model)
 
 
 def _clean(text):
@@ -71,3 +224,117 @@ def _normalise_enum(value, allowed):
     }
     candidate = aliases.get(token, token)
     return candidate if candidate in allowed else value
+
+
+def _extract_name(text):
+    patterns = [
+        r"\bmy name is\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,4})",
+        r"\bi am\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,4})",
+        r"\bi'm\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,4})",
+        r"我是\s*([\u4e00-\u9fffA-Za-z ]{2,40})",
+        r"我叫\s*([\u4e00-\u9fffA-Za-z ]{2,40})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return _trim_name(match.group(1))
+    # Common demo shape: "Hi, Mei Ling Chen here ..."
+    match = re.search(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){2})\b", text)
+    return _trim_name(match.group(1)) if match else None
+
+
+def _trim_name(value):
+    value = re.split(r"\b(and|from|with|who|want|need|applying|apply)\b", value)[0]
+    value = re.split(r"[,.，。]", value)[0]
+    return " ".join(value.strip().split())
+
+
+def _extract_nationality(text):
+    lower = text.lower()
+    if "chinese passport" in lower or "china passport" in lower or "中国护照" in text:
+        return "Chinese"
+    match = re.search(r"\b([A-Z][a-z]+)\s+passport\b", text)
+    if match:
+        return match.group(1)
+    match = re.search(r"\bnationality\s*[:：=-]?\s*([A-Za-z ]+)", text, re.IGNORECASE)
+    if match:
+        return re.split(r"[,.，。]", match.group(1).strip())[0]
+    return None
+
+
+def _extract_dates(text):
+    found = []
+    for match in re.finditer(r"\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b", text):
+        found.append("%04d-%02d-%02d" % (
+            int(match.group(1)), int(match.group(2)), int(match.group(3))))
+    for match in re.finditer(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b", text):
+        found.append("%04d-%02d-%02d" % (
+            int(match.group(3)), int(match.group(2)), int(match.group(1))))
+    return _dedupe(found)
+
+
+def _extract_visit_purpose(lower):
+    if any(word in lower for word in ["family", "sister", "brother", "mother", "father", "relative", "visit my"]):
+        return "family_visit"
+    if "tour" in lower or "holiday" in lower:
+        return "tourism"
+    if "business" in lower:
+        return "business"
+    if "medical" in lower:
+        return "medical"
+    if "study" in lower:
+        return "study_short"
+    return None
+
+
+def _extract_uk_relative(lower):
+    if any(word in lower for word in ["sister in the uk", "brother in the uk", "relative in the uk", "family in the uk", "uk relative"]):
+        return True
+    if "no relative" in lower or "no family in the uk" in lower:
+        return False
+    return None
+
+
+def _extract_employment(lower):
+    if "self-employed" in lower or "self employed" in lower or "freelance" in lower:
+        return "self_employed"
+    if "employed" in lower or "employee" in lower:
+        return "employed"
+    if "student" in lower:
+        return "student"
+    if "retired" in lower:
+        return "retired"
+    if "unemployed" in lower or "not working" in lower:
+        return "unemployed"
+    return None
+
+
+def _extract_third_party_funding(lower):
+    if any(phrase in lower for phrase in ["self-funded", "self funded", "pay myself", "funding it myself", "i pay"]):
+        return False
+    if any(phrase in lower for phrase in ["sponsor pays", "paid by", "someone else", "my sister will pay", "my family will pay"]):
+        return True
+    return None
+
+
+def _extract_prior_refusal(lower):
+    if "no refusal" in lower or "never refused" in lower or "no visa refusal" in lower:
+        return False
+    if "refused" in lower or "refusal" in lower:
+        return True
+    return None
+
+
+def _extract_cost(lower):
+    match = re.search(r"(?:gbp|£)\s*([0-9][0-9,]*(?:\.\d+)?)", lower)
+    if not match:
+        match = re.search(r"([0-9][0-9,]*(?:\.\d+)?)\s*(?:gbp|pounds)", lower)
+    return match.group(1) if match else None
+
+
+def _dedupe(values):
+    out = []
+    for value in values:
+        if value not in out:
+            out.append(value)
+    return out

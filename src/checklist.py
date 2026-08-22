@@ -93,6 +93,10 @@ class Checklist(object):
                 return slot
         return None
 
+    def missing_slots(self, filled):
+        # type: (Dict[str, Any]) -> List[Dict[str, Any]]
+        return [slot for slot in self.slots if filled.get(slot["id"]) is None]
+
     def slot(self, slot_id):
         for s in self.slots:
             if s["id"] == slot_id:

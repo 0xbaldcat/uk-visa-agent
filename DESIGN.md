@@ -46,6 +46,37 @@ breath, and no form captures that. A pure agent fails on the asymmetry above.
 Implementation: `state.next_action()` is a pure function of persisted case state.
 Same case, same next step, every time — no model call anywhere in the decision path.
 
+### 2.1 LLM ingress layer: every email may be natural language
+
+The client does not know our state machine. They may write:
+
+> Hi, I am Mei Ling Chen, Chinese passport, visiting my sister in the UK from
+> 2026-10-05 to 2027-01-03. What documents do I need?
+
+or later:
+
+> I am self-employed, paying myself, no refusals, probably around GBP 4200.
+
+So every inbound email should first pass through an **ingress interpreter**. Its
+job is to convert messy input into structured events and fields:
+
+- `provide_intake_facts`
+- `provide_documents`
+- `ask_clarification`
+- `change_previous_answer`
+- `cannot_provide_document`
+
+The PoC implements the first slice: while the case is in intake, every text email
+is parsed for all currently missing slots, not just the next slot. If a real
+OpenAI-compatible LLM key is configured, `ChatCompletionsIntakeClient` performs
+that extraction. If not, `EmailDemoModel` falls back to deterministic parsing so
+the demo remains reproducible offline.
+
+This still does **not** let the LLM drive the case. The interpreter may say
+"these facts were present"; it may not decide what requirements exist, whether a
+document is acceptable, or whether the pack is ready. Structured output re-enters
+the workflow only after schema coercion in `llm.coerce_slot()`.
+
 ---
 
 ## 3. Delivery stability: six failure modes and the control for each
@@ -198,8 +229,9 @@ Out of scope here, but real:
    isolated in `sources.yaml:volatile` with `as_of` stamps rather than hardcoded.
 3. **WhatsApp productionisation** — Business API number, template approval, and a
    cost model for the 2026-10-01 pricing change.
-4. **Real model adapter** — replace `StubModel`; add per-call timeouts, retries and
-   an escalation path when the model is unavailable.
+4. **Real model hardening** — the PoC has an optional OpenAI-compatible intake
+   adapter; production still needs provider observability, retries, redaction,
+   per-call budgets, and escalation when the model is unavailable.
 5. **Audit retention** — every client-facing statement should be reconstructible
    against the rule version and reviewer at the time.
 6. **Refusal feedback loop** — refusal reasons should flow back into the risk model.
@@ -227,12 +259,12 @@ src/deliver.py                    the four deliverables
 src/channels.py                   WhatsApp window, in-memory email, router
 src/real_email.py                 optional SMTP/IMAP adapter for live walkthroughs
 src/email_bridge.py               raw .eml / IMAP -> Engine bridge
-src/email_model.py                deterministic plain-text / JSON email parser
+src/email_model.py                email intake parser + optional chat-completions adapter
 src/engine.py                     turn handler
 demo.py                           end-to-end scripted walkthrough
 real_email_demo.py                live email smoke script
 email_poll_once.py                live mailbox poll-once loop
-tests/test_poc.py                 54 tests, one per invariant
+tests/test_poc.py                 tests, one per invariant
 ```
 
 Run: `python3 demo.py` and `python3 -m unittest discover -s tests`

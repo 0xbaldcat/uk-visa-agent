@@ -3,6 +3,7 @@
 These are not coverage tests. Each one pins a property that, if it broke, would
 let the system do the specific harmful thing the architecture exists to prevent.
 """
+import json
 import os
 import subprocess
 import sys
@@ -400,6 +401,44 @@ class TestDocumentExtraction(unittest.TestCase):
             fields, {"tie_types": "apartment mortgage; elderly mother as dependant"})
 
 
+class TestLLMIngress(unittest.TestCase):
+    def test_chat_completions_intake_client_coerces_json_fields(self):
+        class FakeResponse(object):
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return False
+            def read(self):
+                return json.dumps({
+                    "choices": [{"message": {"content": json.dumps({
+                        "applicant_name": "Mei Ling Chen",
+                        "has_uk_settled_relative": "yes",
+                        "ignored": "not in schema",
+                    })}}]
+                }).encode("utf-8")
+
+        calls = []
+        old = email_model.urllib.request.urlopen
+        try:
+            email_model.urllib.request.urlopen = lambda req, timeout: (
+                calls.append((req, timeout)) or FakeResponse())
+            client = email_model.ChatCompletionsIntakeClient(
+                api_key="secret", model="v4flash", base_url="https://llm.example.test")
+            parsed = client.parse_intake("hello", [
+                {"id": "applicant_name", "type": "text"},
+                {"id": "has_uk_settled_relative", "type": "bool"},
+            ])
+        finally:
+            email_model.urllib.request.urlopen = old
+
+        self.assertEqual(parsed, {
+            "applicant_name": "Mei Ling Chen",
+            "has_uk_settled_relative": True,
+        })
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0].full_url, "https://llm.example.test/chat/completions")
+
+
 class TestUnimplementedCheckIsFatal(unittest.TestCase):
     def test_unknown_check_raises_rather_than_passing(self):
         with self.assertRaises(validate.UnknownCheck):
@@ -772,6 +811,53 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(case.slots, SLOTS)
         self.assertEqual(sink[-1]["case_id"], "t1")
         self.assertIn("Passport biographic page", sink[-1]["body"])
+
+    def test_freeform_first_email_extracts_multiple_intake_fields(self):
+        cl = load()
+        st, case = make_case(slots={})
+        st.save_case(case)
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        poller.poll_raw([self._raw_email(
+            subject="[visa-agent:t1] UK visa help",
+            body=("Hi, my name is Mei Ling Chen. I have a Chinese passport and "
+                  "want to apply for a UK visitor visa to visit my sister in the UK "
+                  "from 2026-10-05 to 2027-01-03. What documents do I need?"))])
+
+        case = st.get_case("t1")
+        self.assertEqual(case.slots["applicant_name"], "Mei Ling Chen")
+        self.assertEqual(case.slots["nationality"], "Chinese")
+        self.assertEqual(case.slots["trip_start"], "2026-10-05")
+        self.assertEqual(case.slots["trip_end"], "2027-01-03")
+        self.assertEqual(case.slots["visit_purpose"], "family_visit")
+        self.assertTrue(case.slots["has_uk_settled_relative"])
+        self.assertIn("current work situation", sink[-1]["body"])
+        self.assertIn("anyone else paying", sink[-1]["body"])
+
+    def test_intake_reply_asks_remaining_fields_as_a_group(self):
+        cl = load()
+        st, case = make_case(slots={})
+        st.save_case(case)
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        poller.poll_raw([self._raw_email(
+            subject="[visa-agent:t1] intake", body="Mei Ling Chen")])
+
+        self.assertIn("please reply with these details", sink[-1]["body"])
+        self.assertIn("What nationality is your passport?", sink[-1]["body"])
+        self.assertIn("What date are you planning to arrive", sink[-1]["body"])
 
     def test_gmail_quote_text_does_not_pollute_plain_reply(self):
         cl = load()

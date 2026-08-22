@@ -45,16 +45,25 @@ class Engine(object):
         if action.kind == "ask_slot":
             spec = self.checklist.slot(action.slot)
             try:
-                value = self.model.parse_reply(text, action.slot, spec)
+                parsed = self._parse_intake(text, action)
+                if parsed:
+                    for slot_id, value in parsed.items():
+                        case.slots[slot_id] = value
+                        self.store.log(case_id, "slot_filled", {
+                            "slot": slot_id, "value": value, "source": "intake_parse"})
+                    self._advance_stage(case)
+                    self.store.save_case(case)
+                else:
+                    value = self.model.parse_reply(text, action.slot, spec)
+                    case.slots[action.slot] = value
+                    self.store.log(case_id, "slot_filled", {"slot": action.slot, "value": value})
+                    self._advance_stage(case)
+                    self.store.save_case(case)
             except llm_mod.ModelRefusal as exc:
                 # The model could not read the answer. Ask again once; never invent.
                 self.store.log(case_id, "slot_parse_refused",
                                {"slot": action.slot, "reason": str(exc)})
                 return self._respond(case, action, now=now)
-            case.slots[action.slot] = value
-            self.store.log(case_id, "slot_filled", {"slot": action.slot, "value": value})
-            self._advance_stage(case)
-            self.store.save_case(case)
 
         case = self.store.get_case(case_id)
         return self._respond(case, state.next_action(case, self.checklist), now=now)
@@ -120,6 +129,17 @@ class Engine(object):
         return True
 
     # --- internals ------------------------------------------------------
+
+    def _parse_intake(self, text, action):
+        if not hasattr(self.model, "parse_intake"):
+            return {}
+        slots = []
+        for slot_id in action.payload.get("slots") or [action.slot]:
+            spec = self.checklist.slot(slot_id)
+            if spec:
+                slots.append(spec)
+        parsed = self.model.parse_intake(text, slots)
+        return parsed or {}
 
     def _resolve_checks(self, ev, case):
         """Inject sibling-document values for cross-document checks."""

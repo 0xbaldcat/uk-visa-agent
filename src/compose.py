@@ -20,6 +20,17 @@ def compose(action, checklist, case, model=None):
     kind = action.kind
 
     if kind == "ask_slot":
+        grouped = action.payload.get("slots") or []
+        if len(grouped) > 1:
+            questions = []
+            for slot_id in grouped:
+                spec = checklist.slot(slot_id) or {}
+                if spec.get("question"):
+                    questions.append("- %s" % spec["question"])
+            if questions:
+                return ("Thanks, I can help prepare the UK visitor visa materials. "
+                        "To build the right checklist, please reply with these details:\n%s"
+                        % "\n".join(questions))
         spec = checklist.slot(action.slot) or {}
         # Slots carry their own question text: a bool or enum slot cannot be
         # phrased by slotting a noun into "your ___?" without reading oddly.

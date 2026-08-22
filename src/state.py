@@ -75,7 +75,9 @@ def next_action(case, checklist):
     # 1. Intake slots first, in declared order, so the conversation has a stable shape.
     missing_slot = checklist.first_missing_slot(case.slots)
     if missing_slot is not None:
-        return Action("ask_slot", slot=missing_slot["id"])
+        return Action("ask_slot", slot=missing_slot["id"],
+                      payload={"slots": _intake_prompt_group(
+                          missing_slot["id"], checklist.missing_slots(case.slots))})
 
     # 2. Anything that failed validation outranks anything not yet supplied:
     #    fixing a wrong document is cheaper for the client than opening a new front.
@@ -94,3 +96,19 @@ def next_action(case, checklist):
     if case.stage == Stage.HUMAN_REVIEW:
         return Action("await_human", reason="pack_delivered")
     return Action("deliver_pack")
+
+
+INTAKE_GROUPS = [
+    ["applicant_name", "nationality", "trip_start", "trip_end", "visit_purpose",
+     "has_uk_settled_relative"],
+    ["employment_status", "third_party_funding", "prior_uk_refusal",
+     "estimated_trip_cost_gbp"],
+]
+
+
+def _intake_prompt_group(first_missing_id, missing_slots):
+    missing_ids = [slot["id"] for slot in missing_slots]
+    for group in INTAKE_GROUPS:
+        if first_missing_id in group:
+            return [slot_id for slot_id in group if slot_id in missing_ids]
+    return [first_missing_id]
