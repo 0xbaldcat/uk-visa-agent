@@ -847,6 +847,20 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Approve for final report", html_body)
         self.assertIn("Needs client follow-up", html_body)
 
+    def test_admin_panel_shows_saved_decision_feedback(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+        st.record_adviser_review("t1", "approved_for_final_report", reviewer="test")
+
+        html_body = admin_panel.render_app(
+            st, cl, {"case": ["t1"], "saved": ["approved_for_final_report"]})
+
+        self.assertIn("Review decision recorded: approved for final report", html_body)
+        self.assertIn("Review History", html_body)
+        self.assertIn("approved_for_final_report", html_body)
+
     def test_adviser_review_decision_is_persisted(self):
         st, case = make_case(evidence=COMPLETE_EVIDENCE)
         case.stage = state.Stage.HUMAN_REVIEW

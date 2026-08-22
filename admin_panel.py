@@ -94,6 +94,15 @@ textarea, input[type=text] {
   font: inherit;
 }
 .actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+.notice {
+  border: 1px solid #bdd6ca;
+  background: #e8f3ed;
+  color: #164938;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 14px 0;
+  font-weight: 650;
+}
 button {
   border: 0;
   border-radius: 6px;
@@ -203,9 +212,10 @@ def render_list(rows, active_id):
     return '<div class="panel list">%s</div>' % "".join(links)
 
 
-def render_case(st, cl, case_id):
+def render_case(st, cl, case_id, query=None):
     if not case_id:
         return '<div class="panel empty">No case selected.</div>'
+    query = query or {}
     case = st.get_case(case_id)
     satisfied, missing, failing = case.outstanding(cl)
     review = st.latest_adviser_review(case_id)
@@ -232,13 +242,31 @@ def render_case(st, cl, case_id):
         "<tr><th>{}</th><td>{}</td></tr>".format(esc(k), esc(v))
         for k, v in sorted(case.slots.items()))
     review_html = (
-        '<div class="metric"><span>Latest adviser decision</span><b>%s</b><div class="meta">%s</div></div>'
+        '<div class="metric"><span>Latest adviser decision</span><b>%s</b>'
+        '<div class="meta">%s</div><div class="meta">%s</div></div>'
         % (esc(review["decision"] if review else "none"),
-           esc(review["note"] if review else "No review recorded yet.")))
+           esc(review["created_at"] if review else "No review recorded yet."),
+           esc(review["note"] if review and review["note"] else "")))
+    saved = (query.get("saved") or [""])[0]
+    notice = ""
+    if saved:
+        notice = ('<div class="notice">Review decision recorded: %s</div>'
+                  % esc(saved.replace("_", " ")))
+    history = st.conn.execute(
+        "SELECT decision, note, reviewer, created_at FROM adviser_reviews "
+        "WHERE case_id = ? ORDER BY id DESC LIMIT 8", (case_id,)).fetchall()
+    history_rows = "".join(
+        "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+            esc(row["created_at"]), esc(row["decision"]), esc(row["reviewer"]),
+            esc(row["note"]))
+        for row in history)
+    if not history_rows:
+        history_rows = '<tr><td colspan="4" class="meta">No review decisions yet.</td></tr>'
     return """
 <div class="panel content">
   <div class="case-id">{case_id}</div>
   <div class="meta">Stage: <span class="status {stage_cls}">{stage}</span></div>
+  {notice}
   <div class="grid" style="margin-top:14px">
     <div class="metric"><span>Accepted</span><b>{accepted}</b></div>
     <div class="metric"><span>Missing</span><b>{missing}</b></div>
@@ -257,6 +285,9 @@ def render_case(st, cl, case_id):
     </div>
   </form>
 
+  <h2>Review History</h2>
+  <table><thead><tr><th>Time</th><th>Decision</th><th>Reviewer</th><th>Note</th></tr></thead><tbody>{history_rows}</tbody></table>
+
   <h2>Intake Facts</h2>
   <table>{slot_rows}</table>
 
@@ -270,10 +301,12 @@ def render_case(st, cl, case_id):
         case_id=esc(case.id),
         stage=esc(case.stage.value),
         stage_cls=status_class(case.stage.value),
+        notice=notice,
         accepted=len(satisfied),
         missing=len(missing),
         failing=len(failing),
         review_html=review_html,
+        history_rows=history_rows,
         slot_rows=slot_rows,
         rows="".join(rows),
         pack=esc(pack))
@@ -284,7 +317,7 @@ def render_app(st, cl, query):
     active_id = selected_case_id(st, query)
     body = '<div class="layout">%s%s</div>' % (
         render_list(rows, active_id),
-        render_case(st, cl, active_id))
+        render_case(st, cl, active_id, query=query))
     return page("Visa Adviser Review", body)
 
 
@@ -323,7 +356,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         st.record_adviser_review(case_id, decision, note=note, reviewer="admin_panel")
         self.send_response(303)
-        self.send_header("Location", "/?case=%s" % urllib.parse.quote(case_id))
+        self.send_header("Location", "/?case=%s&saved=%s" % (
+            urllib.parse.quote(case_id), urllib.parse.quote(decision)))
         self.end_headers()
 
     def _send_html(self, html_body):
