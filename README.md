@@ -80,6 +80,20 @@ PDFs, DOCX/text files, JSON developer shortcuts, and OCR sidecars. Scanned PDFs
 and images need a real OCR adapter; the adapter seam is
 `document_extract.DocumentTextExtractor`.
 
+## Local Adviser Admin Panel
+
+Completed cases enter `human_review`. The local admin panel shows those cases,
+the collected facts and materials, the internal adviser review pack, and a simple
+review decision form.
+
+```bash
+python3 admin_panel.py --db live-panwei.sqlite3 --port 8765
+```
+
+Open <http://127.0.0.1:8765>. Decisions are written to `adviser_reviews` and the
+case audit trail. This is a PoC review surface, not an authenticated production
+admin app.
+
 ## The demo case
 
 Deliberately a hard one: a self-employed applicant, funds only just adequate, a

@@ -136,6 +136,15 @@ CREATE TABLE IF NOT EXISTS workflow_events (
     detail TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS adviser_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    note TEXT,
+    reviewer TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -335,6 +344,25 @@ class Store(object):
             "(case_id, evidence_id, check_kind, result, detail) VALUES (?,?,?,?,?)",
             (case_id, evidence_id, check_kind, result, json.dumps(detail or {})))
         self.conn.commit()
+
+    def record_adviser_review(self, case_id, decision, note=None, reviewer=None):
+        cur = self.conn.execute(
+            "INSERT INTO adviser_reviews (case_id, decision, note, reviewer) "
+            "VALUES (?,?,?,?)",
+            (case_id, decision, note, reviewer))
+        self.conn.commit()
+        self.log(case_id, "adviser_review_recorded", {
+            "review_id": cur.lastrowid,
+            "decision": decision,
+            "reviewer": reviewer,
+            "note": note,
+        })
+        return cur.lastrowid
+
+    def latest_adviser_review(self, case_id):
+        return self.conn.execute(
+            "SELECT * FROM adviser_reviews WHERE case_id = ? ORDER BY id DESC LIMIT 1",
+            (case_id,)).fetchone()
 
     # --- email threading -----------------------------------------------
 

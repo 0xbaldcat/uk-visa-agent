@@ -14,8 +14,10 @@ from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "src"))
 
+import admin_panel
 import channels
 import checklist as checklist_mod
 import compose
@@ -827,6 +829,39 @@ class TestDemoScripts(unittest.TestCase):
         self.assertIn("EMAIL-ONLY FALLBACK", result.stdout)
         self.assertIn("[late chase] action=request_resupply via=email", result.stdout)
         self.assertIn("visa-application-review-pack.md", result.stdout)
+
+
+class TestAdminPanel(unittest.TestCase):
+    def test_admin_panel_renders_human_review_case_and_pack(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+
+        html_body = admin_panel.render_app(st, cl, {"case": ["t1"]})
+
+        self.assertIn("Visa Adviser Review", html_body)
+        self.assertIn("case-id", html_body)
+        self.assertIn("Internal Review Pack", html_body)
+        self.assertIn("Visa Application Review Pack", html_body)
+        self.assertIn("Approve for final report", html_body)
+        self.assertIn("Needs client follow-up", html_body)
+
+    def test_adviser_review_decision_is_persisted(self):
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+
+        review_id = st.record_adviser_review(
+            "t1", "needs_client_follow_up", note="Ask for cleaner bank statements",
+            reviewer="test")
+        latest = st.latest_adviser_review("t1")
+        audit_kinds = [row["kind"] for row in st.audit_trail("t1")]
+
+        self.assertGreater(review_id, 0)
+        self.assertEqual(latest["decision"], "needs_client_follow_up")
+        self.assertEqual(latest["note"], "Ask for cleaner bank statements")
+        self.assertIn("adviser_review_recorded", audit_kinds)
 
 
 class TestRealEmailAdapter(unittest.TestCase):
