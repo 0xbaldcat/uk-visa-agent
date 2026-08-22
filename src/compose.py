@@ -42,9 +42,11 @@ def compose(action, checklist, case, model=None):
 
     if kind == "request_evidence":
         ev = checklist.evidence(action.evidence_id) or {}
-        line = "Next I need: %s." % ev.get("label", action.evidence_id)
+        line = "Next I need:\n- %s" % ev.get("label", action.evidence_id)
         why = _why(ev)
-        return "%s %s" % (line, why) if why else line
+        if why:
+            return "%s\n\nWhy this matters:\n%s" % (line, why)
+        return line
 
     if kind == "request_resupply":
         ev = checklist.evidence(action.evidence_id) or {}

@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "src"))
 
 import channels
 import checklist as checklist_mod
+import compose
 import deliver
 import diagnose
 import document_extract
@@ -319,6 +320,15 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(saved.stage, state.Stage.HUMAN_REVIEW)
         self.assertIn("long_stay", cover["risks_not_yet_addressed"])
         self.assertIn("narrative_draft_refused", audit_kinds)
+
+    def test_request_evidence_email_is_formatted_for_email_reading(self):
+        cl = load()
+        _, case = make_case()
+        body = compose.compose(state.Action("request_evidence", evidence_id="passport"),
+                               cl, case)
+
+        self.assertIn("Next I need:\n- Passport biographic page", body)
+        self.assertIn("\n\nWhy this matters:\n", body)
 
 
 class TestModelBoundary(unittest.TestCase):
