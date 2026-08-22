@@ -195,6 +195,16 @@ class Case(object):
                 return ev["id"], self._blocking(rec)
         return None
 
+    def failed_evidence(self, checklist):
+        # type: (Any) -> List[Tuple[str, List[Dict[str, Any]]]]
+        """All required evidence items with blocking failures, in checklist order."""
+        failing = []
+        for ev in checklist.required_evidence(self.slots):
+            rec = self.evidence.get(ev["id"])
+            if rec and self._blocking(rec):
+                failing.append((ev["id"], self._blocking(rec)))
+        return failing
+
     def outstanding(self, checklist):
         """(satisfied, missing, failing) evidence ids -- used by the report."""
         satisfied, missing, failing = [], [], []

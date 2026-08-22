@@ -81,11 +81,12 @@ def next_action(case, checklist):
 
     # 2. Anything that failed validation outranks anything not yet supplied:
     #    fixing a wrong document is cheaper for the client than opening a new front.
-    failed = case.first_failed_evidence(checklist)
-    if failed is not None:
-        ev_id, failures = failed
+    failed = case.failed_evidence(checklist)
+    if failed:
+        ev_id, failures = failed[0]
         return Action("request_resupply", evidence_id=ev_id,
-                      reason="failed_validation", payload={"failures": failures})
+                      reason="failed_validation",
+                      payload={"failures": failures, "evidence_failures": failed})
 
     # 3. Then evidence that is required-and-absent.
     missing_ev = checklist.first_missing_evidence(case.slots, case.evidence)

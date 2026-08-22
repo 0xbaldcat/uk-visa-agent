@@ -286,6 +286,31 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(action.kind, "request_resupply")
         self.assertEqual(action.evidence_id, "passport")
 
+    def test_resupply_action_carries_all_failing_evidence(self):
+        cl = load()
+        _, case = make_case(evidence={
+            "passport": {"fields": {}, "failures": [
+                {"advisory": False, "message": "passport expired"}]},
+            "bank_statements": {"fields": {}, "failures": [
+                {"advisory": False, "message": "wrong account holder"}]},
+            "travel_itinerary": {"fields": {}, "failures": [
+                {"advisory": False, "message": "wrong passenger name"}]},
+        })
+
+        action = state.next_action(case, cl)
+        body = compose.compose(action, cl, case)
+
+        self.assertEqual(action.kind, "request_resupply")
+        self.assertEqual(action.evidence_id, "passport")
+        self.assertEqual([item[0] for item in action.payload["evidence_failures"]], [
+            "passport", "bank_statements", "travel_itinerary"])
+        self.assertIn("Passport biographic page", body)
+        self.assertIn("Personal bank statements", body)
+        self.assertIn("Travel booking", body)
+        self.assertIn("passport expired", body)
+        self.assertIn("wrong account holder", body)
+        self.assertIn("wrong passenger name", body)
+
     def test_illegal_transition_raises(self):
         with self.assertRaises(state.IllegalTransition):
             state.transition(state.Stage.INTAKE, state.Stage.ASSEMBLING)

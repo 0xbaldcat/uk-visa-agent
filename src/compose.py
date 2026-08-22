@@ -60,10 +60,23 @@ def compose(action, checklist, case, model=None):
         return "\n".join(lines).rstrip()
 
     if kind == "request_resupply":
+        grouped = action.payload.get("evidence_failures")
+        if grouped:
+            lines = [
+                "Thanks - I've checked the files you sent. I found these problems before we can use them:",
+                "",
+            ]
+            for ev_id, problems in grouped:
+                ev = checklist.evidence(ev_id) or {}
+                shown = _shown_failures(problems)
+                lines.append("- %s" % ev.get("label", ev_id))
+                for failure in shown:
+                    lines.append("  - %s" % failure.get("message"))
+                lines.append("")
+            lines.append("Could you send replacement versions for these items?")
+            return "\n".join(lines).rstrip()
         ev = checklist.evidence(action.evidence_id) or {}
-        problems = action.payload.get("failures", [])
-        blocking = [f for f in problems if not f.get("advisory")]
-        shown = blocking or problems
+        shown = _shown_failures(action.payload.get("failures", []))
         bullets = "\n".join("  - %s" % f.get("message") for f in shown)
         return ("Thanks - I've had a look at this (%s) and there's a problem I need "
                 "to flag before we use it:\n%s\n\nCould you send a version that "
@@ -100,3 +113,8 @@ def _missing_evidence_items(checklist, case):
         ev for ev in checklist.required_evidence(getattr(case, "slots", {}) or {})
         if ev["id"] not in supplied
     ]
+
+
+def _shown_failures(problems):
+    blocking = [f for f in problems if not f.get("advisory")]
+    return blocking or problems
