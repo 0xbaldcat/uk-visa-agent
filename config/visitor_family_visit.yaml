@@ -80,7 +80,7 @@ evidence:
     label: Passport biographic page (plus previous visa pages)
     category: identity
     required: always
-    why: "Identity and travel history. Prior travel and compliance history is an explicit factor in caseworker assessment."
+    why: "Send the passport page with your photo and personal details. If you have previous visas or entry stamps from the UK or other countries, include clear copies of those pages too."
     source: caseworker_guidance
     extract: [holder_name, passport_number, expiry_date, nationality, prior_compliant_travel]
     checks:
@@ -99,7 +99,7 @@ evidence:
     label: Personal bank statements (recent months)
     category: funds
     required: always
-    why: "Evidence for the sufficient-funds limb. There is no legal minimum balance; the test is whether income after existing commitments reasonably covers this trip."
+    why: "Send recent personal bank statements showing your name, statement dates, regular income or savings, and the closing balance."
     source: appendix_v
     extract: [account_holder_name, period_start, period_end, closing_balance, currency]
     checks:
@@ -128,7 +128,7 @@ evidence:
     label: Travel booking or itinerary showing return travel
     category: itinerary
     required: always
-    why: "Supports the will-leave limb and establishes the length of stay actually intended."
+    why: "Send a flight booking, reservation, or planned itinerary that shows your outbound and return travel dates and passenger name."
     source: supporting_docs
     extract: [outbound_date, return_date, passenger_name]
     checks:
@@ -152,7 +152,7 @@ evidence:
     label: Proof of where you will stay
     category: itinerary
     required: always
-    why: "Establishes the practical arrangements for the visit."
+    why: "Send a hotel booking, accommodation confirmation, or host address showing where you plan to stay in the UK."
     source: supporting_docs
     extract: [address, host_name, stay_start, stay_end]
     checks:
@@ -165,7 +165,7 @@ evidence:
     required_when:
       slot: has_uk_settled_relative
       equals: true
-    why: "Sets out the relationship, the arrangements, and who is paying. Caseworkers look for consistency between applicant and sponsor accounts."
+    why: "Send a letter from your UK relative with their name, address, relationship to you, visit dates, accommodation arrangements, and whether they will provide financial support."
     source: caseworker_guidance
     extract: [sponsor_name, sponsor_address, relationship, stay_start, stay_end, funding_offered]
     checks:
@@ -184,7 +184,7 @@ evidence:
     required_when:
       slot: has_uk_settled_relative
       equals: true
-    why: "Confirms the host is settled or British, which is what makes the invitation meaningful."
+    why: "Send a copy of your UK relative's British passport, biometric residence permit, eVisa/share-code evidence, or other proof of their UK status."
     source: supporting_docs
     extract: [sponsor_name, status_type]
     checks:
@@ -197,7 +197,7 @@ evidence:
     required_when:
       slot: third_party_funding
       equals: true
-    why: "Where a third party funds the trip, the caseworker considers whether that person can support both themselves and the applicant."
+    why: "Send your sponsor's recent bank statements showing their name, statement dates, regular income or savings, and closing balance."
     source: caseworker_guidance
     extract: [account_holder_name, period_start, period_end, closing_balance, currency]
     checks:
@@ -210,7 +210,7 @@ evidence:
     required_when:
       slot: employment_status
       equals: employed
-    why: "Primary evidence of an economic tie to the home country and of an intention to return to work."
+    why: "Send an employer letter showing your employer name, job title, salary if available, approved leave dates, and expected return-to-work date."
     source: caseworker_guidance
     extract: [employer_name, job_title, leave_start, leave_end, annual_salary]
     checks:
@@ -230,7 +230,7 @@ evidence:
     required_when:
       slot: employment_status
       equals: self_employed
-    why: "Self-employed and irregular income is a documented refusal-risk category, so the economic tie needs to be evidenced more fully."
+    why: "Send documents showing your business is active, such as business registration, recent tax records, and business bank statements."
     source: caseworker_guidance
     extract: [business_name, registration_id, tax_year, declared_income, business_statement_period_start, business_statement_period_end]
     checks:
@@ -241,7 +241,7 @@ evidence:
     label: Evidence of your ties to your home country (property, family, dependants, studies)
     category: home_ties
     required: always
-    why: "Personal and economic ties to the country of residence are an explicit factor in the caseworker's assessment of whether the applicant will leave."
+    why: "Send any relevant documents showing commitments in your home country, such as property, family or dependant responsibilities, studies, or other ongoing obligations."
     source: caseworker_guidance
     extract: [tie_types]
     checks:

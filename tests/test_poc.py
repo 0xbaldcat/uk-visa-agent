@@ -350,8 +350,8 @@ class TestDeterminism(unittest.TestCase):
         self.assertIn("Here is what I still need", body)
         self.assertIn("- Passport biographic page", body)
         self.assertIn("- Personal bank statements", body)
-        self.assertIn("  Note: Identity and travel history", body)
-        self.assertIn("caseworker assessment.\n\n- Personal bank statements", body)
+        self.assertIn("  Note: Send the passport page with your photo", body)
+        self.assertIn("other countries, include clear copies of those pages too.\n\n- Personal bank statements", body)
 
     def test_request_evidence_email_lists_only_remaining_materials(self):
         cl = load()
