@@ -1193,6 +1193,7 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(st.get_case("t1").slots["applicant_name"], "Mei Ling Chen")
         self.assertEqual(results[-1]["sent"]["in_reply_to"], "<client-reply@example.test>")
         self.assertEqual(results[-1]["sent"]["to_addr"], "client@example.test")
+        self.assertEqual(results[-1]["sent"]["subject"], "Re: Visa preparation update")
 
     def test_new_email_without_case_token_auto_creates_case(self):
         cl = load()
@@ -1217,6 +1218,7 @@ class TestEmailBridge(unittest.TestCase):
         self.assertTrue(case_id.startswith("case_"))
         self.assertEqual(st.get_case(case_id).slots["applicant_name"], "Mei Ling Chen")
         self.assertEqual(results[-1]["sent"]["case_id"], case_id)
+        self.assertEqual(results[-1]["sent"]["subject"], "Re: UK visa help")
         self.assertEqual(st.case_for_email_message(sink[-1]["message_id"]), case_id)
 
     def test_reply_to_auto_created_case_uses_persisted_message_map(self):
@@ -1581,6 +1583,7 @@ class TestEmailBridge(unittest.TestCase):
 
             self.assertEqual(st2.get_case("t1").slots["nationality"], "Chinese")
             self.assertEqual(sink2[-1]["in_reply_to"], "<client-second@example.test>")
+            self.assertEqual(sink2[-1]["subject"], "Re: Visa preparation update")
 
 
 class TestImapSafety(unittest.TestCase):

@@ -255,7 +255,7 @@ class EmailPoller(object):
                 references.append(parsed.message_id)
             channel.set_thread_context(
                 case_id, in_reply_to=parsed.message_id, references=references,
-                to_addr=parsed.from_addr or None)
+                to_addr=parsed.from_addr or None, subject=parsed.subject)
 
     def _document_ref(self, case_id, parsed, attachment, index):
         if not self.attachment_dir:

@@ -40,11 +40,13 @@ class EmailChannel(Channel):
         self.sink = sink if sink is not None else []
         self._thread_context = {}
 
-    def set_thread_context(self, case_id, in_reply_to=None, references=None, to_addr=None):
+    def set_thread_context(self, case_id, in_reply_to=None, references=None,
+                           to_addr=None, subject=None):
         self._thread_context[case_id] = {
             "in_reply_to": in_reply_to,
             "references": list(references or []),
             "to_addr": to_addr,
+            "subject": subject,
         }
 
     def send(self, case_id, body, kind="session", attachments=None):
@@ -58,7 +60,8 @@ class EmailChannel(Channel):
                "message_id": message_id,
                "in_reply_to": context.get("in_reply_to"),
                "references": references,
-               "to_addr": context.get("to_addr")}
+               "to_addr": context.get("to_addr"),
+               "subject": _thread_subject(context, case_id, kind, attachments)}
         self.sink.append(msg)
         return msg
 
@@ -151,3 +154,24 @@ class Router(object):
                 "We still need a couple of documents for your application - "
                 "reply here and we'll pick up where we left off.",
                 kind="template", template_name=fallback_template, now=now)
+
+
+def _thread_subject(context, case_id, kind, attachments):
+    if context.get("in_reply_to") and context.get("subject"):
+        subject = context["subject"].strip()
+        if subject.lower().startswith("re:"):
+            return subject
+        return "Re: %s" % subject
+    return "[visa-agent:%s] %s" % (case_id, _subject_for(kind, attachments))
+
+
+def _subject_for(kind, attachments):
+    if attachments:
+        return "Document pack ready"
+    if kind == "deliver_pack":
+        return "Ready for adviser review"
+    if kind == "request_resupply":
+        return "Please replace one document"
+    if kind == "request_evidence":
+        return "Next document needed"
+    return "Visa preparation update"

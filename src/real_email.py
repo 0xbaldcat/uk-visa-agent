@@ -93,11 +93,13 @@ class RealEmailChannel(object):
         self.settings = settings
         self._thread_context = {}
 
-    def set_thread_context(self, case_id, in_reply_to=None, references=None, to_addr=None):
+    def set_thread_context(self, case_id, in_reply_to=None, references=None,
+                           to_addr=None, subject=None):
         self._thread_context[case_id] = {
             "in_reply_to": in_reply_to,
             "references": list(references or []),
             "to_addr": to_addr,
+            "subject": subject,
         }
 
     def send(self, case_id, body, kind="session", attachments=None):
@@ -105,7 +107,7 @@ class RealEmailChannel(object):
         references = list(context.get("references") or [])
         if context.get("in_reply_to") and context["in_reply_to"] not in references:
             references.append(context["in_reply_to"])
-        subject = "[visa-agent:%s] %s" % (case_id, _subject_for(kind, attachments))
+        subject = _thread_subject(context, case_id, kind, attachments)
         settings = self.settings
         if context.get("to_addr"):
             settings = EmailSettings(
@@ -149,6 +151,15 @@ def _subject_for(kind, attachments):
     if kind == "request_evidence":
         return "Next document needed"
     return "Visa preparation update"
+
+
+def _thread_subject(context, case_id, kind, attachments):
+    if context.get("in_reply_to") and context.get("subject"):
+        subject = context["subject"].strip()
+        if subject.lower().startswith("re:"):
+            return subject
+        return "Re: %s" % subject
+    return "[visa-agent:%s] %s" % (case_id, _subject_for(kind, attachments))
 
 
 def fetch_unseen_raw(settings, mailbox="INBOX", from_addr=None, limit=10):
