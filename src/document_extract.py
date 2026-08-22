@@ -261,19 +261,25 @@ def extract_fields_from_file_with_trace(path, wanted_fields, text_extractor=None
 
     missing = [field for field in wanted_fields if field not in accepted]
     if missing and field_extractor is not None:
-        llm_candidate = field_extractor.parse_document_candidate(text, missing)
-        for key, value in llm_candidate.items():
-            if key not in accepted:
-                candidate[key] = value
-        llm_accepted, llm_rejected, llm_errors = validate_document_candidate(
-            llm_candidate, missing)
-        for key, value in llm_accepted.items():
-            if key not in accepted:
-                accepted[key] = value
-        rejected.update(dict((k, v) for k, v in llm_rejected.items()
-                             if k not in accepted))
-        errors.extend(llm_errors)
         provider = "deterministic+document-llm"
+        try:
+            llm_candidate = field_extractor.parse_document_candidate(text, missing)
+            for key, value in llm_candidate.items():
+                if key not in accepted:
+                    candidate[key] = value
+            llm_accepted, llm_rejected, llm_errors = validate_document_candidate(
+                llm_candidate, missing)
+            for key, value in llm_accepted.items():
+                if key not in accepted:
+                    accepted[key] = value
+            rejected.update(dict((k, v) for k, v in llm_rejected.items()
+                                 if k not in accepted))
+            errors.extend(llm_errors)
+        except llm.ModelRefusal as exc:
+            errors.append({
+                "field": "_document_llm",
+                "error": str(exc),
+            })
 
     if accepted and rejected:
         status = "partially_applied"

@@ -536,6 +536,31 @@ class TestDocumentExtraction(unittest.TestCase):
         self.assertEqual(field_extractor.calls[0]["wanted_fields"], [
             "passport_number", "expiry_date"])
 
+    def test_document_llm_failure_keeps_deterministic_fields(self):
+        text = "\n".join([
+            "Holder Name: Mei Ling Chen",
+            "Document No.: EK1234567",
+        ])
+
+        class RefusingDocumentFieldExtractor(object):
+            model_name = "refusing-document-test"
+            def parse_document_candidate(self, text, wanted_fields):
+                raise llm.ModelRefusal("LLM document parse failed: timed out")
+
+        result = document_extract.extract_fields_from_file_with_trace(
+            "ignored.pdf",
+            ["holder_name", "passport_number", "expiry_date"],
+            text_extractor=StaticTextExtractor(text),
+            field_extractor=RefusingDocumentFieldExtractor())
+
+        self.assertEqual(result.accepted_json, {
+            "holder_name": "Mei Ling Chen",
+        })
+        self.assertEqual(result.status, "applied")
+        self.assertEqual(result.provider, "deterministic+document-llm")
+        self.assertIn("_document_llm", [
+            err["field"] for err in result.validation_errors])
+
 
 class TestLLMIngress(unittest.TestCase):
     def test_chat_completions_intake_client_coerces_json_fields(self):
