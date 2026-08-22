@@ -63,6 +63,68 @@ CREATE TABLE IF NOT EXISTS email_message_cases (
     case_id TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS ingress_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    raw_message_id TEXT,
+    event_type TEXT NOT NULL,
+    prompt_version TEXT,
+    schema_version TEXT,
+    model_name TEXT,
+    candidate_json TEXT NOT NULL DEFAULT '{}',
+    accepted_json TEXT NOT NULL DEFAULT '{}',
+    rejected_json TEXT NOT NULL DEFAULT '{}',
+    validation_errors TEXT NOT NULL DEFAULT '[]',
+    repair_attempts INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS document_extraction_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    evidence_id TEXT,
+    document_ref TEXT,
+    provider TEXT,
+    candidate_json TEXT NOT NULL DEFAULT '{}',
+    accepted_json TEXT NOT NULL DEFAULT '{}',
+    validation_errors TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS validation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    evidence_id TEXT,
+    check_kind TEXT,
+    result TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS generation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    generation_type TEXT,
+    model_name TEXT,
+    referenced_facts TEXT NOT NULL DEFAULT '[]',
+    output_ref TEXT,
+    guard_result TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    before_state TEXT,
+    after_state TEXT,
+    detail TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -202,6 +264,44 @@ class Store(object):
     def audit_trail(self, case_id):
         return self.conn.execute(
             "SELECT * FROM audit WHERE case_id = ? ORDER BY id", (case_id,)).fetchall()
+
+    # --- trace events ---------------------------------------------------
+
+    def record_ingress_event(self, case_id, trace):
+        cur = self.conn.execute(
+            "INSERT INTO ingress_events "
+            "(case_id, raw_message_id, event_type, prompt_version, schema_version, "
+            "model_name, candidate_json, accepted_json, rejected_json, validation_errors, "
+            "repair_attempts, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (case_id,
+             trace.get("raw_message_id"),
+             trace.get("event_type"),
+             trace.get("prompt_version"),
+             trace.get("schema_version"),
+             trace.get("model_name"),
+             json.dumps(trace.get("candidate_json") or {}),
+             json.dumps(trace.get("accepted_json") or {}),
+             json.dumps(trace.get("rejected_json") or {}),
+             json.dumps(trace.get("validation_errors") or []),
+             int(trace.get("repair_attempts") or 0),
+             trace.get("status") or "rejected"))
+        self.conn.commit()
+        return cur.lastrowid
+
+    def record_workflow_event(self, case_id, event_type, before_state=None,
+                              after_state=None, detail=None):
+        self.conn.execute(
+            "INSERT INTO workflow_events "
+            "(case_id, event_type, before_state, after_state, detail) VALUES (?,?,?,?,?)",
+            (case_id, event_type, before_state, after_state, json.dumps(detail or {})))
+        self.conn.commit()
+
+    def record_validation_event(self, case_id, evidence_id, check_kind, result, detail=None):
+        self.conn.execute(
+            "INSERT INTO validation_events "
+            "(case_id, evidence_id, check_kind, result, detail) VALUES (?,?,?,?,?)",
+            (case_id, evidence_id, check_kind, result, json.dumps(detail or {})))
+        self.conn.commit()
 
     # --- email threading -----------------------------------------------
 

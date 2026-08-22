@@ -25,6 +25,7 @@ import email_bridge
 import email_model
 import engine as engine_mod
 import facts
+import ingress
 import llm
 import real_email
 import state
@@ -95,6 +96,15 @@ class FileAwareModel(llm.StubModel):
                 assert fh.read() == b"PDFDATA"
             return {"tie_types": "apartment mortgage; elderly mother as dependant"}
         return super().extract_fields(document, wanted_fields)
+
+
+class EventModel(llm.StubModel):
+    def __init__(self, event):
+        super(EventModel, self).__init__()
+        self.event = event
+
+    def parse_intake_event(self, text, slot_specs):
+        return self.event
 
 
 def simple_pdf_bytes(lines):
@@ -413,7 +423,6 @@ class TestLLMIngress(unittest.TestCase):
                     "choices": [{"message": {"content": json.dumps({
                         "applicant_name": "Mei Ling Chen",
                         "has_uk_settled_relative": "yes",
-                        "ignored": "not in schema",
                     })}}]
                 }).encode("utf-8")
 
@@ -437,6 +446,53 @@ class TestLLMIngress(unittest.TestCase):
         })
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0].full_url, "https://llm.example.test/chat/completions")
+
+    def test_ingress_repair_accepts_fixed_field_and_records_trace(self):
+        cl = load()
+        parser = ingress.StaticCandidateParser([
+            {"employment_status": "contractor", "estimated_trip_cost_gbp": "5000 pounds"},
+            {"employment_status": "employed", "estimated_trip_cost_gbp": "5000"},
+        ])
+        interpreter = ingress.IntakeIngressInterpreter(parser, max_repairs=1)
+
+        result = interpreter.parse("I am employed, trip cost is 5000 pounds.", [
+            cl.slot("employment_status"),
+            cl.slot("estimated_trip_cost_gbp"),
+        ])
+
+        self.assertEqual(result.status, "applied")
+        self.assertEqual(result.accepted_json, {
+            "employment_status": "employed",
+            "estimated_trip_cost_gbp": 5000.0,
+        })
+        self.assertEqual(result.repair_attempts, 1)
+        self.assertEqual(len(parser.repair_calls), 1)
+        self.assertEqual(parser.repair_calls[0]["errors"][0]["field"], "employment_status")
+
+    def test_ingress_repair_failure_does_not_apply_bad_field(self):
+        cl = load()
+        parser = ingress.StaticCandidateParser([
+            {"employment_status": "contractor"},
+            {"employment_status": "freelancer contractor"},
+        ])
+        interpreter = ingress.IntakeIngressInterpreter(parser, max_repairs=1)
+
+        result = interpreter.parse("I work contracts.", [cl.slot("employment_status")])
+
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.accepted_json, {})
+        self.assertEqual(result.rejected_json, {"employment_status": "freelancer contractor"})
+        self.assertEqual(result.repair_attempts, 1)
+
+    def test_store_has_production_trace_tables(self):
+        st = store_mod.Store()
+        tables = set(row["name"] for row in st.conn.execute(
+            "select name from sqlite_master where type='table'"))
+
+        self.assertTrue({
+            "ingress_events", "document_extraction_events", "validation_events",
+            "generation_events", "workflow_events",
+        }.issubset(tables))
 
 
 class TestUnimplementedCheckIsFatal(unittest.TestCase):
@@ -462,6 +518,29 @@ class TestIdempotency(unittest.TestCase):
         second = eng.handle_reply("t1", "Mei Ling Chen", "wa:1")
         self.assertIsNotNone(first)
         self.assertIsNone(second)
+
+    def test_engine_records_ingress_event_trace(self):
+        cl = load()
+        st, case = make_case(slots={})
+        event = ingress.IngressResult(
+            "provide_intake_facts",
+            candidate_json={"employment_status": "contractor"},
+            accepted_json={},
+            rejected_json={"employment_status": "contractor"},
+            validation_errors=[{"field": "employment_status", "error": "bad enum"}],
+            repair_attempts=1,
+            status="rejected",
+            model_name="test-model")
+        eng = engine_mod.Engine(st, cl, EventModel(event), today=TODAY)
+
+        eng.handle_reply("t1", "I do contracts", "email:bad", channel="email")
+
+        saved = st.get_case("t1")
+        row = st.conn.execute("select * from ingress_events").fetchone()
+        self.assertEqual(saved.slots, {})
+        self.assertEqual(row["case_id"], "t1")
+        self.assertEqual(row["status"], "rejected")
+        self.assertEqual(json.loads(row["rejected_json"]), {"employment_status": "contractor"})
 
 
 class TestWhatsAppWindow(unittest.TestCase):

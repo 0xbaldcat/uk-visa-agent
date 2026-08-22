@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 
 import document_extract
+import ingress
 import llm
 
 QUOTE_CUTOFFS = [
@@ -33,17 +34,15 @@ class EmailDemoModel(llm.StubModel):
             value = _normalise_enum(value, slot_spec.get("values", []))
         return llm.coerce_slot(value, slot_spec)
 
-    def parse_intake(self, text, slot_specs):
-        remote = {}
+    def parse_intake_event(self, text, slot_specs):
+        parsers = []
         if self.intake_client is not None:
-            try:
-                remote = self.intake_client.parse_intake(text, slot_specs) or {}
-            except llm.ModelRefusal:
-                pass
-        cleaned = _clean(text)
-        raw = {}
-        wanted = set(spec["id"] for spec in slot_specs)
-        lower = cleaned.lower()
+            parsers.append(self.intake_client)
+        parsers.append(ingress.DeterministicIntakeCandidateParser())
+        return MergedIntakeInterpreter(parsers).parse(text, slot_specs)
+
+    def parse_intake(self, text, slot_specs):
+        return self.parse_intake_event(text, slot_specs).accepted_json
 
         if "applicant_name" in wanted:
             name = _extract_name(cleaned)
@@ -84,21 +83,6 @@ class EmailDemoModel(llm.StubModel):
             if cost is not None:
                 raw["estimated_trip_cost_gbp"] = cost
 
-        coerced = {}
-        for spec in slot_specs:
-            slot_id = spec["id"]
-            if slot_id not in raw:
-                continue
-            try:
-                coerced[slot_id] = llm.coerce_slot(raw[slot_id], spec)
-            except llm.ModelRefusal:
-                continue
-        merged = dict(remote)
-        for slot_id, value in coerced.items():
-            if slot_id not in merged:
-                merged[slot_id] = value
-        return merged
-
     def extract_fields(self, document, wanted_fields):
         if os.path.exists(document) and document.endswith(".json"):
             with open(document) as fh:
@@ -118,29 +102,23 @@ class ChatCompletionsIntakeClient(object):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.model_name = model
+
+    def parse_intake_candidate(self, text, slot_specs):
+        return self._complete_json(_intake_messages(text, slot_specs))
+
+    def repair_intake_candidate(self, text, slot_specs, candidate, errors, accepted):
+        return self._complete_json(_repair_messages(text, slot_specs, candidate, errors, accepted))
 
     def parse_intake(self, text, slot_specs):
-        wanted = [{
-            "id": spec["id"],
-            "type": spec.get("type", "text"),
-            "values": spec.get("values", []),
-            "prompt_hint": spec.get("prompt_hint"),
-        } for spec in slot_specs]
+        return ingress.IntakeIngressInterpreter(self).parse(text, slot_specs).accepted_json
+
+    def _complete_json(self, messages):
         payload = {
             "model": self.model,
             "temperature": 0,
             "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": (
-                    "Extract UK visitor visa intake facts from the user's email. "
-                    "Return only a JSON object. Include only fields that are explicitly "
-                    "stated or strongly implied. Do not invent missing values. "
-                    "Use the provided slot ids exactly.")},
-                {"role": "user", "content": json.dumps({
-                    "slots": wanted,
-                    "email": text,
-                }, ensure_ascii=False)},
-            ],
+            "messages": messages,
         }
         try:
             req = urllib.request.Request(
@@ -159,17 +137,141 @@ class ChatCompletionsIntakeClient(object):
             parsed = json.loads(content)
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise llm.ModelRefusal("LLM intake response was not JSON: %s" % exc)
+        if not isinstance(parsed, dict):
+            raise llm.ModelRefusal("LLM intake response was not a JSON object")
+        return parsed
 
-        allowed = dict((spec["id"], spec) for spec in slot_specs)
-        coerced = {}
-        for slot_id, value in parsed.items():
-            if slot_id not in allowed or value in (None, ""):
-                continue
+
+class MergedIntakeInterpreter(object):
+    def __init__(self, parsers):
+        self.parsers = parsers
+
+    def parse(self, text, slot_specs):
+        combined = {}
+        traces = []
+        repair_attempts = 0
+        errors = []
+        model_names = []
+        for parser in self.parsers:
             try:
-                coerced[slot_id] = llm.coerce_slot(value, allowed[slot_id])
-            except llm.ModelRefusal:
+                result = ingress.IntakeIngressInterpreter(parser).parse(text, slot_specs)
+            except llm.ModelRefusal as exc:
+                errors.append({"field": "_parser", "error": str(exc)})
                 continue
-        return coerced
+            traces.append(result)
+            repair_attempts += result.repair_attempts
+            if result.model_name:
+                model_names.append(result.model_name)
+            for key, value in result.accepted_json.items():
+                if key not in combined:
+                    combined[key] = value
+        candidate = {}
+        rejected = {}
+        for trace in traces:
+            candidate.update(trace.candidate_json)
+            rejected.update(trace.rejected_json)
+            errors.extend(trace.validation_errors)
+        status = "applied" if combined and not rejected else (
+            "partially_applied" if combined else "rejected")
+        return ingress.IngressResult(
+            "provide_intake_facts",
+            candidate_json=candidate,
+            accepted_json=combined,
+            rejected_json=dict((k, v) for k, v in rejected.items() if k not in combined),
+            validation_errors=errors,
+            repair_attempts=repair_attempts,
+            status=status,
+            model_name="+".join(model_names) if model_names else None,
+            raw_input=text,
+        )
+
+
+def extract_intake_candidates(text, slot_specs):
+    cleaned = _clean(text)
+    raw = {}
+    wanted = set(spec["id"] for spec in slot_specs)
+    lower = cleaned.lower()
+
+    if "applicant_name" in wanted:
+        name = _extract_name(cleaned)
+        if name:
+            raw["applicant_name"] = name
+    if "nationality" in wanted:
+        nationality = _extract_nationality(cleaned)
+        if nationality:
+            raw["nationality"] = nationality
+    if "trip_start" in wanted or "trip_end" in wanted:
+        dates = _extract_dates(cleaned)
+        if "trip_start" in wanted and len(dates) >= 1:
+            raw["trip_start"] = dates[0]
+        if "trip_end" in wanted and len(dates) >= 2:
+            raw["trip_end"] = dates[1]
+    if "visit_purpose" in wanted:
+        purpose = _extract_visit_purpose(lower)
+        if purpose:
+            raw["visit_purpose"] = purpose
+    if "has_uk_settled_relative" in wanted:
+        relative = _extract_uk_relative(lower)
+        if relative is not None:
+            raw["has_uk_settled_relative"] = relative
+    if "employment_status" in wanted:
+        employment = _extract_employment(lower)
+        if employment:
+            raw["employment_status"] = employment
+    if "third_party_funding" in wanted:
+        funding = _extract_third_party_funding(lower)
+        if funding is not None:
+            raw["third_party_funding"] = funding
+    if "prior_uk_refusal" in wanted:
+        refusal = _extract_prior_refusal(lower)
+        if refusal is not None:
+            raw["prior_uk_refusal"] = refusal
+    if "estimated_trip_cost_gbp" in wanted:
+        cost = _extract_cost(lower)
+        if cost is not None:
+            raw["estimated_trip_cost_gbp"] = cost
+    return raw
+
+
+def _intake_messages(text, slot_specs):
+        wanted = [{
+            "id": spec["id"],
+            "type": spec.get("type", "text"),
+            "values": spec.get("values", []),
+            "prompt_hint": spec.get("prompt_hint"),
+        } for spec in slot_specs]
+        return [
+            {"role": "system", "content": (
+                "Extract UK visitor visa intake facts from the user's email. "
+                "Return only a JSON object. Include only fields that are explicitly "
+                "stated or strongly implied. Do not invent missing values. "
+                "Use the provided slot ids exactly.")},
+            {"role": "user", "content": json.dumps({
+                "slots": wanted,
+                "email": text,
+            }, ensure_ascii=False)},
+        ]
+
+
+def _repair_messages(text, slot_specs, candidate, errors, accepted):
+    return [
+        {"role": "system", "content": (
+            "Repair a JSON object for UK visa intake extraction. Only fix fields "
+            "that were present in the original email. Do not invent missing facts. "
+            "Return only a JSON object using the requested slot ids.")},
+        {"role": "user", "content": json.dumps({
+            "slots": [{
+                "id": spec["id"],
+                "type": spec.get("type", "text"),
+                "values": spec.get("values", []),
+                "prompt_hint": spec.get("prompt_hint"),
+            } for spec in slot_specs],
+            "email": text,
+            "candidate_json": candidate,
+            "accepted_json": accepted,
+            "validation_errors": errors,
+        }, ensure_ascii=False)},
+    ]
 
 
 def intake_client_from_env():

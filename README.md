@@ -18,6 +18,11 @@ python3 -m unittest discover -s tests        # 54 tests
 
 The model seam is stubbed, so the demo is offline and deterministic.
 
+The live email path can optionally use an OpenAI-compatible LLM for natural
+language intake parsing. LLM output is treated as candidate structure: schema
+validation accepts valid fields, rejects invalid fields, and may perform one
+bounded repair attempt. The trace is recorded in `ingress_events`.
+
 ## Documentation
 
 - [Research and design](docs/visa-agent-poc-research.md)

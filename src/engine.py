@@ -19,6 +19,7 @@ import compose
 import deliver
 import diagnose
 import facts
+import ingress
 import llm as llm_mod
 import state
 import validate
@@ -45,7 +46,10 @@ class Engine(object):
         if action.kind == "ask_slot":
             spec = self.checklist.slot(action.slot)
             try:
-                parsed = self._parse_intake(text, action)
+                event = self._parse_intake(text, action)
+                parsed = event.accepted_json if event else {}
+                if event and hasattr(self.store, "record_ingress_event"):
+                    self.store.record_ingress_event(case_id, event.trace(raw_message_id=dedupe_key))
                 if parsed:
                     for slot_id, value in parsed.items():
                         case.slots[slot_id] = value
@@ -131,15 +135,26 @@ class Engine(object):
     # --- internals ------------------------------------------------------
 
     def _parse_intake(self, text, action):
-        if not hasattr(self.model, "parse_intake"):
+        if not (hasattr(self.model, "parse_intake_event")
+                or hasattr(self.model, "parse_intake")):
             return {}
         slots = []
         for slot_id in action.payload.get("slots") or [action.slot]:
             spec = self.checklist.slot(slot_id)
             if spec:
                 slots.append(spec)
-        parsed = self.model.parse_intake(text, slots)
-        return parsed or {}
+        if hasattr(self.model, "parse_intake_event"):
+            return self.model.parse_intake_event(text, slots)
+        if hasattr(self.model, "parse_intake"):
+            parsed = self.model.parse_intake(text, slots)
+            return ingress.IngressResult(
+                "provide_intake_facts",
+                candidate_json=parsed or {},
+                accepted_json=parsed or {},
+                status=("applied" if parsed else "rejected"),
+                model_name=getattr(self.model, "model_name", None),
+                raw_input=text)
+        return ingress.IngressResult("provide_intake_facts", raw_input=text)
 
     def _resolve_checks(self, ev, case):
         """Inject sibling-document values for cross-document checks."""

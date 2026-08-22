@@ -77,6 +77,18 @@ This still does **not** let the LLM drive the case. The interpreter may say
 document is acceptable, or whether the pack is ready. Structured output re-enters
 the workflow only after schema coercion in `llm.coerce_slot()`.
 
+When schema validation rejects part of the candidate JSON, the ingress layer may
+perform one bounded repair attempt. The repair prompt receives the original
+email, target schema, accepted fields and validation errors. It is allowed to fix
+format or enum shape; it is not allowed to invent facts the user did not provide.
+If repair still fails, valid fields are kept, invalid fields are rejected, and the
+workflow asks the user for the missing or unclear information.
+
+The trace is persisted in `ingress_events`: candidate JSON, accepted JSON,
+rejected JSON, validation errors, repair attempts and final status. The system
+does not store or rely on chain-of-thought; it stores reproducible inputs and
+outputs.
+
 Case identity follows the same rule. A first-contact email with no subject token
 and no reply-header mapping creates a new case automatically. Replies are mapped
 back through RFC `Message-ID` / `In-Reply-To` / `References`; a fixed
@@ -258,6 +270,7 @@ src/checklist.py                  the only module that answers "what is required
 src/validate.py                   deterministic checks; advisory vs blocking
 src/diagnose.py                   risk observations, tie coverage, funds picture
 src/facts.py                      fabrication guard
+src/ingress.py                    structured event validation, repair, trace object
 src/llm.py                        model seam: 3 jobs, schema-checked returns
 src/compose.py                    action -> words
 src/deliver.py                    the four deliverables
