@@ -907,6 +907,54 @@ class TestAdminPanel(unittest.TestCase):
         self.assertEqual(latest["note"], "Ask for cleaner bank statements")
         self.assertIn("adviser_review_recorded", audit_kinds)
 
+    def test_adviser_notification_is_persisted(self):
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+
+        notification_id = st.record_adviser_notification(
+            "t1", "approved_for_final_report", "sent", review_id=7,
+            to_addr="client@example.test", subject="Reviewed", body="Done",
+            message_id="<out@example.test>")
+        latest = st.latest_adviser_notification("t1")
+        audit_kinds = [row["kind"] for row in st.audit_trail("t1")]
+
+        self.assertGreater(notification_id, 0)
+        self.assertEqual(latest["status"], "sent")
+        self.assertEqual(latest["to_addr"], "client@example.test")
+        self.assertIn("adviser_notification_recorded", audit_kinds)
+
+    def test_customer_notification_payloads_match_decision(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+
+        subject, body, attachments = admin_panel.customer_notification(
+            cl, case, "approved_for_final_report", "Reviewed by Alex.")
+        self.assertIn("Adviser review complete", subject)
+        self.assertIn("final review report", body)
+        self.assertEqual(attachments[0]["filename"], "visa-final-review-report.md")
+        self.assertIn("Reviewed by Alex.", attachments[0]["content"])
+
+        subject, body, attachments = admin_panel.customer_notification(
+            cl, case, "needs_client_follow_up", "Please resend the bank statement.")
+        self.assertIn("Adviser follow-up needed", subject)
+        self.assertIn("Please resend the bank statement.", body)
+        self.assertEqual(attachments, [])
+
+    def test_notify_client_skips_when_no_case_sender(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+
+        status = admin_panel.notify_client(
+            st, cl, "t1", 12, "needs_client_follow_up", "Need another file")
+        latest = st.latest_adviser_notification("t1")
+
+        self.assertEqual(status, "skipped")
+        self.assertEqual(latest["status"], "skipped")
+        self.assertIn("no client email", latest["error"])
+
 
 class TestRealEmailAdapter(unittest.TestCase):
     def test_build_message_attaches_json_deliverables(self):

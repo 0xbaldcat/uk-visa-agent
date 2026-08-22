@@ -8,6 +8,8 @@ pack, and persist the adviser's decision.
 import argparse
 import html
 import os
+import shlex
+import smtplib
 import sys
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +19,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 import checklist  # noqa: E402
 import deliver  # noqa: E402
+import real_email  # noqa: E402
 import store as store_mod  # noqa: E402
 
 
@@ -190,6 +193,143 @@ def review_pack(cl, case):
     return deliver.render_pack_attachments(pack)[0]["content"]
 
 
+def client_email_for_case(st, case_id):
+    row = st.conn.execute(
+        "SELECT sender FROM email_sender_cases WHERE case_id = ? "
+        "ORDER BY last_seen_at DESC, created_at DESC LIMIT 1",
+        (case_id,)).fetchone()
+    return row["sender"] if row else None
+
+
+def load_email_settings(to_addr):
+    _load_local_env_file(os.path.join(ROOT, ".local-live.env"))
+    defaults = {
+        "VISA_AGENT_SMTP_HOST": "smtp.gmail.com",
+        "VISA_AGENT_SMTP_PORT": "587",
+        "VISA_AGENT_IMAP_HOST": "imap.gmail.com",
+        "VISA_AGENT_IMAP_PORT": "993",
+        "VISA_AGENT_EMAIL_USER": "visa.agent.demo@gmail.com",
+        "VISA_AGENT_FROM_EMAIL": "visa.agent.demo@gmail.com",
+    }
+    for key, value in defaults.items():
+        os.environ.setdefault(key, value)
+    os.environ["VISA_AGENT_TO_EMAIL"] = to_addr or os.environ.get(
+        "VISA_AGENT_TO_EMAIL", "")
+    return real_email.EmailSettings.from_env()
+
+
+def _load_local_env_file(path):
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key and key not in os.environ:
+                parts = shlex.split(value)
+                os.environ[key] = " ".join(parts) if parts else value.strip()
+
+
+def notify_client(st, cl, case_id, review_id, decision, note):
+    case = st.get_case(case_id)
+    to_addr = client_email_for_case(st, case_id)
+    subject, body, attachments = customer_notification(cl, case, decision, note)
+    if not to_addr:
+        st.record_adviser_notification(
+            case_id, decision, "skipped", review_id=review_id,
+            subject=subject, body=body, error="no client email found for case")
+        return "skipped"
+    try:
+        settings = load_email_settings(to_addr)
+        msg = real_email.build_message(settings, subject, body, attachments=attachments)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+            if settings.use_tls:
+                smtp.starttls()
+            smtp.login(settings.username, settings.password)
+            smtp.send_message(msg)
+        st.record_adviser_notification(
+            case_id, decision, "sent", review_id=review_id, to_addr=to_addr,
+            subject=subject, body=body, message_id=msg.get("Message-ID"))
+        return "sent"
+    except Exception as exc:
+        st.record_adviser_notification(
+            case_id, decision, "failed", review_id=review_id, to_addr=to_addr,
+            subject=subject, body=body, error=str(exc))
+        return "failed"
+
+
+def customer_notification(cl, case, decision, note):
+    if decision == "approved_for_final_report":
+        subject = "[visa-agent:%s] Adviser review complete" % case.id
+        body = (
+            "Your materials have been reviewed by an adviser.\n\n"
+            "I've attached the final review report for this stage. Please read it "
+            "and tell us if any factual detail is wrong before you use it.\n\n"
+            "This service does not submit the visa application for you."
+        )
+        report = render_client_final_report(cl, case, note)
+        return subject, body, [{
+            "filename": "visa-final-review-report.md",
+            "content_type": "text/markdown",
+            "content": report,
+        }]
+    subject = "[visa-agent:%s] Adviser follow-up needed" % case.id
+    follow_up = note or "The adviser needs a little more information before final review."
+    body = (
+        "Your materials have been reviewed by an adviser, and we need one more "
+        "follow-up before we can finish the report.\n\n"
+        "%s\n\n"
+        "Please reply to this email with the requested information or documents."
+        % follow_up)
+    return subject, body, []
+
+
+def render_client_final_report(cl, case, adviser_note=None):
+    satisfied, missing, failing = case.outstanding(cl)
+    lines = [
+        "# Visa Materials Review Report",
+        "",
+        "Applicant: %s" % (case.slots.get("applicant_name") or "unknown"),
+        "Status: adviser reviewed",
+        "",
+        "## Summary",
+        "- Materials accepted: %d" % len(satisfied),
+        "- Missing materials: %d" % len(missing),
+        "- Materials needing replacement: %d" % len(failing),
+        "",
+    ]
+    if adviser_note:
+        lines.extend(["## Adviser Note", adviser_note, ""])
+    lines.append("## Accepted Materials")
+    for ev_id in satisfied:
+        ev = cl.evidence(ev_id) or {"label": ev_id}
+        lines.append("- %s" % ev["label"])
+    if missing:
+        lines.extend(["", "## Missing Materials"])
+        for ev_id in missing:
+            ev = cl.evidence(ev_id) or {"label": ev_id}
+            lines.append("- %s" % ev["label"])
+    if failing:
+        lines.extend(["", "## Materials Needing Replacement"])
+        for ev_id in failing:
+            ev = cl.evidence(ev_id) or {"label": ev_id}
+            lines.append("- %s" % ev["label"])
+    lines.extend([
+        "",
+        "## Limits",
+        "- This report confirms materials were reviewed for completeness and consistency.",
+        "- It is not a visa outcome prediction.",
+        "- This service does not submit the application.",
+    ])
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def status_class(value):
     if value in ("needs_replacement", "failed", "escalated"):
         return "bad"
@@ -265,6 +405,7 @@ def render_case(st, cl, case_id, query=None):
     case = st.get_case(case_id)
     satisfied, missing, failing = case.outstanding(cl)
     review = st.latest_adviser_review(case_id)
+    notification = st.latest_adviser_notification(case_id)
     pack = review_pack(cl, case)
     rows = []
     for ev in cl.required_evidence(case.slots):
@@ -293,11 +434,21 @@ def render_case(st, cl, case_id, query=None):
         % (esc(review["decision"] if review else "none"),
            esc(review["created_at"] if review else "No review recorded yet."),
            esc(review["note"] if review and review["note"] else "")))
+    notification_html = (
+        '<div class="metric"><span>Customer notification</span><b>%s</b>'
+        '<div class="meta">%s</div><div class="meta">%s</div></div>'
+        % (esc(notification["status"] if notification else "none"),
+           esc(notification["created_at"] if notification else "No customer email yet."),
+           esc(notification["error"] if notification and notification["error"] else
+               (notification["subject"] if notification else ""))))
     saved = (query.get("saved") or [""])[0]
+    notified = (query.get("notified") or [""])[0]
     notice = ""
     if saved:
-        notice = ('<div class="notice">Review decision recorded: %s</div>'
-                  % esc(saved.replace("_", " ")))
+        text = "Review decision recorded: %s" % saved.replace("_", " ")
+        if notified:
+            text += " · customer notification: %s" % notified
+        notice = '<div class="notice">%s</div>' % esc(text)
     history = st.conn.execute(
         "SELECT decision, note, reviewer, created_at FROM adviser_reviews "
         "WHERE case_id = ? ORDER BY id DESC LIMIT 8", (case_id,)).fetchall()
@@ -318,6 +469,7 @@ def render_case(st, cl, case_id, query=None):
     <div class="metric"><span>Missing</span><b>{missing}</b></div>
     <div class="metric"><span>Needs replacement</span><b>{failing}</b></div>
     {review_html}
+    {notification_html}
   </div>
 
   <h2>Adviser Decision</h2>
@@ -352,6 +504,7 @@ def render_case(st, cl, case_id, query=None):
         missing=len(missing),
         failing=len(failing),
         review_html=review_html,
+        notification_html=notification_html,
         history_rows=history_rows,
         slot_rows=slot_rows,
         rows="".join(rows),
@@ -400,10 +553,14 @@ class Handler(BaseHTTPRequestHandler):
         if not st.get_case(case_id):
             self.send_error(404, "case not found")
             return
-        st.record_adviser_review(case_id, decision, note=note, reviewer="admin_panel")
+        review_id = st.record_adviser_review(
+            case_id, decision, note=note, reviewer="admin_panel")
+        cl = load_checklist()
+        notification_status = notify_client(st, cl, case_id, review_id, decision, note)
         self.send_response(303)
-        self.send_header("Location", "/?case=%s&saved=%s" % (
-            urllib.parse.quote(case_id), urllib.parse.quote(decision)))
+        self.send_header("Location", "/?case=%s&saved=%s&notified=%s" % (
+            urllib.parse.quote(case_id), urllib.parse.quote(decision),
+            urllib.parse.quote(notification_status)))
         self.end_headers()
 
     def _send_html(self, html_body):

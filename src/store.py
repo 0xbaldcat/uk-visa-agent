@@ -145,6 +145,20 @@ CREATE TABLE IF NOT EXISTS adviser_reviews (
     reviewer TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS adviser_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_id INTEGER,
+    case_id TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    to_addr TEXT,
+    subject TEXT,
+    body TEXT,
+    status TEXT NOT NULL,
+    error TEXT,
+    message_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -362,6 +376,32 @@ class Store(object):
     def latest_adviser_review(self, case_id):
         return self.conn.execute(
             "SELECT * FROM adviser_reviews WHERE case_id = ? ORDER BY id DESC LIMIT 1",
+            (case_id,)).fetchone()
+
+    def record_adviser_notification(self, case_id, decision, status, review_id=None,
+                                     to_addr=None, subject=None, body=None,
+                                     error=None, message_id=None):
+        cur = self.conn.execute(
+            "INSERT INTO adviser_notifications "
+            "(review_id, case_id, decision, to_addr, subject, body, status, error, message_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (review_id, case_id, decision, to_addr, subject, body, status, error, message_id))
+        self.conn.commit()
+        self.log(case_id, "adviser_notification_recorded", {
+            "notification_id": cur.lastrowid,
+            "review_id": review_id,
+            "decision": decision,
+            "status": status,
+            "to_addr": to_addr,
+            "subject": subject,
+            "error": error,
+            "message_id": message_id,
+        })
+        return cur.lastrowid
+
+    def latest_adviser_notification(self, case_id):
+        return self.conn.execute(
+            "SELECT * FROM adviser_notifications WHERE case_id = ? ORDER BY id DESC LIMIT 1",
             (case_id,)).fetchone()
 
     # --- email threading -----------------------------------------------
