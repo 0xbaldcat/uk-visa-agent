@@ -1,0 +1,68 @@
+# Provenance registry. Every rule in a route config references one of these ids.
+# An assertion that cannot point at a source id must never reach a deliverable
+# (research doc §5.2 defence 4: 断言可溯源).
+#
+# kind:
+#   statute   - primary legislation
+#   rules     - Immigration Rules
+#   guidance  - Home Office / regulator guidance (persuasive, describes how rules are applied)
+#   practice  - industry practice, NOT a legal requirement. Must be labelled as such
+#               to the client, because presenting practice as law is itself a false claim.
+retrieved: 2026-08-22
+researcher: Doraemon
+
+sources:
+  appendix_v:
+    title: "Immigration Rules Appendix V: Visitor"
+    url: https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-v-visitor
+    kind: rules
+  caseworker_guidance:
+    title: "Visit caseworker guidance (accessible)"
+    url: https://www.gov.uk/government/publications/visit-guidance/visit-caseworker-guidance-accessible--2
+    kind: guidance
+    effective_date: 2026-02-25
+  supporting_docs:
+    title: "Visit visa: guide to supporting documents"
+    url: https://www.gov.uk/government/publications/visitor-visa-guide-to-supporting-documents
+    kind: guidance
+  standard_visitor:
+    title: "Standard Visitor - GOV.UK"
+    url: https://www.gov.uk/standard-visitor
+    kind: guidance
+  part9:
+    title: "Part 9: grounds for refusal (9.7.1 false representations)"
+    url: https://www.gov.uk/guidance/immigration-rules/immigration-rules-part-9-grounds-for-refusal
+    kind: rules
+  iaa_practice_note:
+    title: "IAA Immigration Assistance practice note"
+    url: https://assets.publishing.service.gov.uk/media/654cdfa5c0e06800101b2cc3/Immigration_Assistance_-_Practice_Note_amended_copy_26.04.22.pdf
+    kind: guidance
+  ia_act_1999_s82:
+    title: "Immigration and Asylum Act 1999 s.82"
+    url: https://www.legislation.gov.uk/ukpga/1999/33/section/82
+    kind: statute
+  industry_practice:
+    title: "Common practitioner practice (cross-checked against law firm guidance)"
+    url: null
+    kind: practice
+
+# Values that change often. Research doc explicitly warns not to hardcode these.
+# Anything here must be rendered with its as_of date attached whenever shown.
+volatile:
+  fee_standard_visitor_6m_gbp:
+    value: 135
+    as_of: 2026-08-22
+    source: standard_visitor
+  fee_long_visit_10y_gbp:
+    value: 1128
+    as_of: 2026-08-22
+    source: standard_visitor
+  decision_time_weeks:
+    value: 3
+    as_of: 2026-08-22
+    source: standard_visitor
+    note: "typical, after biometrics; not a guarantee"
+  earliest_application_months_ahead:
+    value: 3
+    as_of: 2026-08-22
+    source: standard_visitor
