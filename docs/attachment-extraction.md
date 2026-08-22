@@ -7,8 +7,14 @@ pipeline is:
 2. `email_model.EmailDemoModel.extract_fields(path, wanted_fields)` calls
    `document_extract.extract_fields_from_file(...)`.
 3. `DocumentTextExtractor.extract_text(path)` returns OCR/document text.
-4. `extract_fields_from_text(text, wanted_fields)` emits only requested fields.
-5. `Engine.apply_document(...)` runs the existing deterministic validation rules.
+4. `extract_fields_from_text(text, wanted_fields)` emits requested fields when
+   the text is already key/value-like.
+5. If key fields are still missing and an LLM client is configured,
+   `ChatCompletionsDocumentClient` proposes candidate fields from the OCR text.
+6. Candidate fields are schema-filtered: only the configured `wanted_fields` are
+   accepted, empty values are ignored, and unrequested keys are rejected.
+7. `Engine.apply_document(...)` records the extraction trace, then runs the
+   existing deterministic validation rules and records validation trace rows.
 
 ## Adapter contract
 
@@ -26,6 +32,16 @@ Failure:
 - raise `llm.ModelRefusal`; the engine records the document as unreadable and
   asks the client to resupply it.
 
+Trace:
+
+- `document_extraction_events.raw_text`: OCR/document text used as extraction
+  input.
+- `candidate_json`: deterministic fields plus any LLM candidate fields.
+- `accepted_json`: fields admitted by the checklist schema.
+- `rejected_json`: unrequested or invalid candidate fields.
+- `validation_errors`: extraction-schema errors, not visa-rule failures.
+- `validation_events`: final code validator result for each configured check.
+
 ## Current local support
 
 - `.json`: developer shortcut containing pre-extracted fields.
@@ -36,6 +52,10 @@ Failure:
 - images and scanned PDFs: use Baidu OCR in live mode when
   `VISA_AGENT_BAIDU_OCR_API_KEY` and `VISA_AGENT_BAIDU_OCR_SECRET_KEY` are set.
   Same-path `.ocr.txt` sidecars are only for deterministic offline tests.
+- LLM fallback: set `VISA_AGENT_LLM_API_KEY` and `VISA_AGENT_LLM_MODEL` to allow
+  non-key/value OCR text to produce candidate fields. The LLM never decides
+  whether the document passes; it only proposes fields for schema and validator
+  checks.
 
 For example, if the saved attachment is:
 

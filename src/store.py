@@ -87,8 +87,11 @@ CREATE TABLE IF NOT EXISTS document_extraction_events (
     evidence_id TEXT,
     document_ref TEXT,
     provider TEXT,
+    model_name TEXT,
+    raw_text TEXT NOT NULL DEFAULT '',
     candidate_json TEXT NOT NULL DEFAULT '{}',
     accepted_json TEXT NOT NULL DEFAULT '{}',
+    rejected_json TEXT NOT NULL DEFAULT '{}',
     validation_errors TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -186,6 +189,7 @@ class Store(object):
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._ensure_trace_columns()
         self.conn.commit()
 
     # --- cases ----------------------------------------------------------
@@ -288,6 +292,26 @@ class Store(object):
         self.conn.commit()
         return cur.lastrowid
 
+    def record_document_extraction_event(self, case_id, evidence_id, document_ref, trace):
+        cur = self.conn.execute(
+            "INSERT INTO document_extraction_events "
+            "(case_id, evidence_id, document_ref, provider, model_name, raw_text, "
+            "candidate_json, accepted_json, rejected_json, validation_errors, status) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (case_id,
+             evidence_id,
+             document_ref,
+             trace.get("provider"),
+             trace.get("model_name"),
+             trace.get("raw_text") or "",
+             json.dumps(trace.get("candidate_json") or {}),
+             json.dumps(trace.get("accepted_json") or {}),
+             json.dumps(trace.get("rejected_json") or {}),
+             json.dumps(trace.get("validation_errors") or []),
+             trace.get("status") or "rejected"))
+        self.conn.commit()
+        return cur.lastrowid
+
     def record_workflow_event(self, case_id, event_type, before_state=None,
                               after_state=None, detail=None):
         self.conn.execute(
@@ -320,3 +344,17 @@ class Store(object):
             "SELECT case_id FROM email_message_cases WHERE message_id = ?",
             (message_id,)).fetchone()
         return None if row is None else row["case_id"]
+
+    def _ensure_trace_columns(self):
+        columns = set(row["name"] for row in self.conn.execute(
+            "PRAGMA table_info(document_extraction_events)").fetchall())
+        additions = [
+            ("model_name", "TEXT"),
+            ("raw_text", "TEXT NOT NULL DEFAULT ''"),
+            ("rejected_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ]
+        for name, ddl in additions:
+            if name not in columns:
+                self.conn.execute(
+                    "ALTER TABLE document_extraction_events ADD COLUMN %s %s" % (
+                        name, ddl))

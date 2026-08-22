@@ -23,10 +23,12 @@ QUOTE_CUTOFFS = [
 
 
 class EmailDemoModel(llm.StubModel):
-    def __init__(self, text_extractor=None, intake_client=None):
+    def __init__(self, text_extractor=None, intake_client=None, document_client=None):
         super(EmailDemoModel, self).__init__()
         self.text_extractor = text_extractor or document_extract.text_extractor_from_env()
         self.intake_client = intake_client
+        self.document_client = document_client or document_client_from_env()
+        self.last_document_trace = None
 
     def parse_reply(self, text, expected_slot, slot_spec):
         value = _clean(text)
@@ -84,13 +86,30 @@ class EmailDemoModel(llm.StubModel):
                 raw["estimated_trip_cost_gbp"] = cost
 
     def extract_fields(self, document, wanted_fields):
+        self.last_document_trace = None
         if os.path.exists(document) and document.endswith(".json"):
             with open(document) as fh:
                 raw = json.load(fh)
-            return dict((k, v) for k, v in raw.items() if k in wanted_fields)
+            accepted, rejected, errors = document_extract.validate_document_candidate(
+                raw, wanted_fields)
+            self.last_document_trace = document_extract.DocumentExtractionResult(
+                candidate_json=raw,
+                accepted_json=accepted,
+                rejected_json=rejected,
+                validation_errors=errors,
+                status=("applied" if accepted and not rejected else (
+                    "partially_applied" if accepted else "rejected")),
+                raw_text=json.dumps(raw, ensure_ascii=False),
+                provider="json-developer-shortcut").trace()
+            return accepted
         if os.path.exists(document):
-            return document_extract.extract_fields_from_file(
-                document, wanted_fields, text_extractor=self.text_extractor)
+            result = document_extract.extract_fields_from_file_with_trace(
+                document, wanted_fields, text_extractor=self.text_extractor,
+                field_extractor=self.document_client)
+            self.last_document_trace = result.trace()
+            if not result.accepted_json:
+                raise llm.ModelRefusal("no requested fields found in %s" % document)
+            return result.accepted_json
         return super().extract_fields(document, wanted_fields)
 
 
@@ -140,6 +159,13 @@ class ChatCompletionsIntakeClient(object):
         if not isinstance(parsed, dict):
             raise llm.ModelRefusal("LLM intake response was not a JSON object")
         return parsed
+
+
+class ChatCompletionsDocumentClient(ChatCompletionsIntakeClient):
+    """OpenAI-compatible extractor for missing fields in OCR/document text."""
+
+    def parse_document_candidate(self, text, wanted_fields):
+        return self._complete_json(_document_messages(text, wanted_fields))
 
 
 class MergedIntakeInterpreter(object):
@@ -274,6 +300,21 @@ def _repair_messages(text, slot_specs, candidate, errors, accepted):
     ]
 
 
+def _document_messages(text, wanted_fields):
+    return [
+        {"role": "system", "content": (
+            "Extract only the requested fields from OCR/document text for a UK "
+            "visa evidence file. Return only a JSON object. Use exactly the "
+            "requested field ids as keys. If a field is not present, omit it. "
+            "Do not infer, translate, invent, judge document sufficiency, or "
+            "return any unrequested keys.")},
+        {"role": "user", "content": json.dumps({
+            "requested_fields": list(wanted_fields),
+            "document_text": text,
+        }, ensure_ascii=False)},
+    ]
+
+
 def intake_client_from_env():
     api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
@@ -282,6 +323,16 @@ def intake_client_from_env():
     model = _normalise_model_name(model)
     base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
     return ChatCompletionsIntakeClient(api_key=api_key, model=model, base_url=base_url)
+
+
+def document_client_from_env():
+    api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        return None
+    model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
+    model = _normalise_model_name(model)
+    base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
+    return ChatCompletionsDocumentClient(api_key=api_key, model=model, base_url=base_url)
 
 
 def _normalise_model_name(model):

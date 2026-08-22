@@ -105,6 +105,14 @@ class Engine(object):
         try:
             fields = self.model.extract_fields(document_ref, ev.get("extract", []))
         except llm_mod.ModelRefusal as exc:
+            self._record_document_trace(case_id, evidence_id, document_ref, {
+                "provider": getattr(self.model, "model_name", None) or "document-extractor",
+                "candidate_json": {},
+                "accepted_json": {},
+                "rejected_json": {},
+                "validation_errors": [{"field": "_document", "error": str(exc)}],
+                "status": "rejected",
+            })
             # Could not read the document. That is a resupply request, not a pass.
             case.evidence[evidence_id] = {
                 "fields": {}, "document_ref": document_ref,
@@ -115,9 +123,13 @@ class Engine(object):
                            {"evidence": evidence_id, "reason": str(exc)})
             self.store.save_case(case)
             return True
+        self._record_document_trace(
+            case_id, evidence_id, document_ref,
+            getattr(self.model, "last_document_trace", None))
 
         checks = self._resolve_checks(ev, case)
         failures = validate.run_checks(checks, fields, case.slots, today=self.today)
+        self._record_validation_trace(case_id, evidence_id, checks, failures)
         case.evidence[evidence_id] = {
             "fields": fields,
             "document_ref": document_ref,
@@ -182,6 +194,25 @@ class Engine(object):
             failures = validate.run_checks(
                 checks, rec.get("fields") or {}, case.slots, today=self.today)
             rec["failures"] = [f.to_dict() for f in failures]
+
+    def _record_document_trace(self, case_id, evidence_id, document_ref, trace):
+        if trace and hasattr(self.store, "record_document_extraction_event"):
+            self.store.record_document_extraction_event(
+                case_id, evidence_id, document_ref, trace)
+
+    def _record_validation_trace(self, case_id, evidence_id, checks, failures):
+        if not hasattr(self.store, "record_validation_event"):
+            return
+        failed = {}
+        for failure in failures:
+            failed.setdefault(failure.check_kind, []).append(failure.to_dict())
+        for chk in checks:
+            kind = chk.get("kind")
+            details = failed.get(kind, [])
+            self.store.record_validation_event(
+                case_id, evidence_id, kind,
+                "failed" if details else "passed",
+                {"failures": details})
 
     def _advance_stage(self, case):
         """Move the stage to match reality. Transitions are validated, not assumed."""

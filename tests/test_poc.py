@@ -108,6 +108,26 @@ class EventModel(llm.StubModel):
         return self.event
 
 
+class StaticTextExtractor(document_extract.DocumentTextExtractor):
+    def __init__(self, text):
+        self.text = text
+
+    def extract_text(self, path):
+        return self.text
+
+
+class StaticDocumentFieldExtractor(object):
+    model_name = "static-document-llm"
+
+    def __init__(self, candidate):
+        self.candidate = candidate
+        self.calls = []
+
+    def parse_document_candidate(self, text, wanted_fields):
+        self.calls.append({"text": text, "wanted_fields": list(wanted_fields)})
+        return dict(self.candidate)
+
+
 def simple_pdf_bytes(lines):
     text = "\\n".join(lines)
     stream = "BT /F1 12 Tf 72 720 Td (%s) Tj ET" % text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
@@ -331,6 +351,7 @@ class TestDeterminism(unittest.TestCase):
         self.assertIn("- Passport biographic page", body)
         self.assertIn("- Personal bank statements", body)
         self.assertIn("  Note: Identity and travel history", body)
+        self.assertIn("caseworker assessment.\n\n- Personal bank statements", body)
 
     def test_request_evidence_email_lists_only_remaining_materials(self):
         cl = load()
@@ -479,6 +500,34 @@ class TestDocumentExtraction(unittest.TestCase):
         self.assertEqual(fields["holder_name"], "Mei Ling Chen")
         self.assertEqual(fields["passport_number"], "EK1234567")
 
+    def test_llm_candidate_fills_fields_missed_by_alias_table(self):
+        text = "\n".join([
+            "Holder Name: Mei Ling Chen",
+            "Document No.: EK1234567",
+            "Valid Through: 2029-04-30",
+        ])
+        field_extractor = StaticDocumentFieldExtractor({
+            "passport_number": "EK1234567",
+            "expiry_date": "2029-04-30",
+            "secret_note": "looks fine",
+        })
+
+        result = document_extract.extract_fields_from_file_with_trace(
+            "ignored.pdf",
+            ["holder_name", "passport_number", "expiry_date"],
+            text_extractor=StaticTextExtractor(text),
+            field_extractor=field_extractor)
+
+        self.assertEqual(result.accepted_json, {
+            "holder_name": "Mei Ling Chen",
+            "passport_number": "EK1234567",
+            "expiry_date": "2029-04-30",
+        })
+        self.assertEqual(result.rejected_json, {"secret_note": "looks fine"})
+        self.assertEqual(result.status, "partially_applied")
+        self.assertEqual(field_extractor.calls[0]["wanted_fields"], [
+            "passport_number", "expiry_date"])
+
 
 class TestLLMIngress(unittest.TestCase):
     def test_chat_completions_intake_client_coerces_json_fields(self):
@@ -562,6 +611,41 @@ class TestLLMIngress(unittest.TestCase):
             "ingress_events", "document_extraction_events", "validation_events",
             "generation_events", "workflow_events",
         }.issubset(tables))
+
+    def test_document_extraction_and_validation_traces_are_persisted(self):
+        cl = load()
+        st, case = make_case(evidence={})
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        model = email_model.EmailDemoModel(
+            text_extractor=StaticTextExtractor("Document No.: EK1234567"),
+            document_client=StaticDocumentFieldExtractor({
+                "holder_name": "Mei Ling Chen",
+                "passport_number": "EK1234567",
+                "expiry_date": "2029-04-30",
+                "unrequested": "must not persist",
+            }))
+        eng = engine_mod.Engine(st, cl, model, today=TODAY)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "passport.pdf")
+            with open(path, "wb") as fh:
+                fh.write(b"not used by static extractor")
+
+            eng.handle_document("t1", "passport", path, "doc-trace-1")
+
+        doc_rows = st.conn.execute(
+            "select * from document_extraction_events where case_id='t1'").fetchall()
+        validation_rows = st.conn.execute(
+            "select * from validation_events where case_id='t1'").fetchall()
+
+        self.assertEqual(len(doc_rows), 1)
+        self.assertIn("Document No.", doc_rows[0]["raw_text"])
+        self.assertEqual(json.loads(doc_rows[0]["accepted_json"])["holder_name"],
+                         "Mei Ling Chen")
+        self.assertEqual(json.loads(doc_rows[0]["rejected_json"]),
+                         {"unrequested": "must not persist"})
+        self.assertTrue(any(row["check_kind"] == "field_present"
+                            for row in validation_rows))
 
 
 class TestUnimplementedCheckIsFatal(unittest.TestCase):

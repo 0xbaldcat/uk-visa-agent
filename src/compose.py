@@ -56,7 +56,8 @@ def compose(action, checklist, case, model=None):
             why = _why(ev)
             if why:
                 lines.append("  Note: %s" % why)
-        return "\n".join(lines)
+            lines.append("")
+        return "\n".join(lines).rstrip()
 
     if kind == "request_resupply":
         ev = checklist.evidence(action.evidence_id) or {}

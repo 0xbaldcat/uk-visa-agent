@@ -25,6 +25,32 @@ class DocumentTextExtractor(object):
         raise NotImplementedError
 
 
+class DocumentExtractionResult(object):
+    def __init__(self, candidate_json=None, accepted_json=None, rejected_json=None,
+                 validation_errors=None, status="rejected", raw_text="",
+                 provider="deterministic-document-extractor", model_name=None):
+        self.candidate_json = candidate_json or {}
+        self.accepted_json = accepted_json or {}
+        self.rejected_json = rejected_json or {}
+        self.validation_errors = validation_errors or []
+        self.status = status
+        self.raw_text = raw_text or ""
+        self.provider = provider
+        self.model_name = model_name
+
+    def trace(self):
+        return {
+            "provider": self.provider,
+            "model_name": self.model_name,
+            "candidate_json": self.candidate_json,
+            "accepted_json": self.accepted_json,
+            "rejected_json": self.rejected_json,
+            "validation_errors": self.validation_errors,
+            "status": self.status,
+            "raw_text": self.raw_text,
+        }
+
+
 class LocalDocumentTextExtractor(DocumentTextExtractor):
     """Offline extractor used by tests and demos.
 
@@ -218,12 +244,53 @@ FIELD_ALIASES = {
 
 
 def extract_fields_from_file(path, wanted_fields, text_extractor=None):
+    result = extract_fields_from_file_with_trace(path, wanted_fields, text_extractor=text_extractor)
+    if not result.accepted_json:
+        raise llm.ModelRefusal("no requested fields found in %s" % path)
+    return result.accepted_json
+
+
+def extract_fields_from_file_with_trace(path, wanted_fields, text_extractor=None,
+                                        field_extractor=None):
     extractor = text_extractor or LocalDocumentTextExtractor()
     text = extractor.extract_text(path)
-    fields = extract_fields_from_text(text, wanted_fields)
-    if not fields:
-        raise llm.ModelRefusal("no requested fields found in %s" % path)
-    return fields
+    deterministic = extract_fields_from_text(text, wanted_fields)
+    candidate = dict(deterministic)
+    accepted, rejected, errors = validate_document_candidate(candidate, wanted_fields)
+    provider = "deterministic-document-extractor"
+
+    missing = [field for field in wanted_fields if field not in accepted]
+    if missing and field_extractor is not None:
+        llm_candidate = field_extractor.parse_document_candidate(text, missing)
+        for key, value in llm_candidate.items():
+            if key not in accepted:
+                candidate[key] = value
+        llm_accepted, llm_rejected, llm_errors = validate_document_candidate(
+            llm_candidate, missing)
+        for key, value in llm_accepted.items():
+            if key not in accepted:
+                accepted[key] = value
+        rejected.update(dict((k, v) for k, v in llm_rejected.items()
+                             if k not in accepted))
+        errors.extend(llm_errors)
+        provider = "deterministic+document-llm"
+
+    if accepted and rejected:
+        status = "partially_applied"
+    elif accepted:
+        status = "applied"
+    else:
+        status = "rejected"
+    return DocumentExtractionResult(
+        candidate_json=candidate,
+        accepted_json=accepted,
+        rejected_json=rejected,
+        validation_errors=errors,
+        status=status,
+        raw_text=text,
+        provider=provider,
+        model_name=getattr(field_extractor, "model_name", None) if field_extractor else None,
+    )
 
 
 def extract_fields_from_text(text, wanted_fields):
@@ -234,6 +301,25 @@ def extract_fields_from_text(text, wanted_fields):
         if value is not None:
             fields[wanted] = _normalise_value(value)
     return fields
+
+
+def validate_document_candidate(candidate, wanted_fields):
+    wanted = set(wanted_fields or [])
+    accepted = {}
+    rejected = {}
+    errors = []
+    if not isinstance(candidate, dict):
+        return {}, {"_root": candidate}, [{
+            "field": "_root", "error": "candidate must be a JSON object"}]
+    for key, value in candidate.items():
+        if key not in wanted:
+            rejected[key] = value
+            errors.append({"field": key, "error": "field not requested for this evidence"})
+            continue
+        if value in (None, ""):
+            continue
+        accepted[key] = _normalise_value(value)
+    return accepted, rejected, errors
 
 
 def _field_value(lines, field):
