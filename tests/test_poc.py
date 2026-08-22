@@ -928,16 +928,29 @@ class TestAdminPanel(unittest.TestCase):
         st.save_case(case_c)
         st.record_adviser_review("case-follow-up", "needs_client_follow_up",
                                   reviewer="test")
+        case_d = st.create_case("case-in-progress", "visitor_family_visit")
+        case_d.stage = state.Stage.INTAKE
+        st.save_case(case_d)
 
         html_body = admin_panel.render_app(st, cl, {})
 
+        self.assertIn("Needs Review", html_body)
+        self.assertIn("Reviewed", html_body)
+        self.assertIn("In Progress", html_body)
         self.assertIn("Needs review", html_body)
         self.assertIn("Needs follow-up", html_body)
         self.assertIn("Approved", html_body)
+        self.assertIn("case-in-progress", html_body)
+        self.assertLess(html_body.index("Needs Review"),
+                        html_body.index("Reviewed"))
+        self.assertLess(html_body.index("Reviewed"),
+                        html_body.index("In Progress"))
         self.assertLess(html_body.index("case-needs-review"),
                         html_body.index("case-follow-up"))
         self.assertLess(html_body.index("case-follow-up"),
                         html_body.index("case-approved"))
+        self.assertLess(html_body.index("case-approved"),
+                        html_body.index("case-in-progress"))
 
     def test_adviser_review_decision_is_persisted(self):
         st, case = make_case(evidence=COMPLETE_EVIDENCE)

@@ -65,6 +65,25 @@ main { padding: 22px 24px 40px; max-width: 1280px; margin: 0 auto; }
 }
 .list a:last-child { border-bottom: 0; }
 .list a.active { background: #eaf1ed; }
+.list-section {
+  border-bottom: 1px solid var(--line);
+}
+.list-section:last-child { border-bottom: 0; }
+.list-section-title {
+  padding: 11px 14px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  background: #fbfbf9;
+  border-bottom: 1px solid var(--line);
+}
+.list-section-empty {
+  padding: 13px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
 .case-id { font-weight: 650; overflow-wrap: anywhere; }
 .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -374,28 +393,52 @@ def page(title, body):
 def render_list(rows, active_id):
     if not rows:
         return '<div class="panel empty">No cases yet.</div>'
-    links = []
-    for row in rows:
-        case = store_mod.Case(row["id"], "visitor_family_visit", row["stage"],
-                              {}, {}, None)
-        active = " active" if row["id"] == active_id else ""
-        label, cls = review_badge(row["review_decision"], case.stage.value)
-        review_meta = row["review_created_at"] or "not reviewed"
-        links.append(
-            '<a class="{active}" href="/?case={id}">'
-            '<div class="case-id">{id}</div>'
-            '<div class="meta">stage: {stage} · updated {updated}</div>'
-            '<div class="badge-row"><span class="badge {cls}">{label}</span>'
-            '<span class="badge neutral">{review_meta}</span></div>'
-            '</a>'.format(
-                active=active,
-                id=esc(row["id"]),
-                stage=esc(case.stage.value),
-                updated=esc(row["updated_at"]),
-                cls=esc(cls),
-                label=esc(label),
-                review_meta=esc(review_meta)))
-    return '<div class="panel list">%s</div>' % "".join(links)
+    grouped = [
+        ("Needs Review", [row for row in rows if list_group(row) == "needs_review"]),
+        ("Reviewed", [row for row in rows if list_group(row) == "reviewed"]),
+        ("In Progress", [row for row in rows if list_group(row) == "in_progress"]),
+    ]
+    sections = []
+    for title, group_rows in grouped:
+        items = []
+        for row in group_rows:
+            items.append(render_list_row(row, active_id))
+        if not items:
+            items.append('<div class="list-section-empty">No cases in this group.</div>')
+        sections.append(
+            '<section class="list-section"><div class="list-section-title">{title}</div>'
+            '{items}</section>'.format(title=esc(title), items="".join(items)))
+    return '<div class="panel list">%s</div>' % "".join(sections)
+
+
+def list_group(row):
+    if row["review_decision"]:
+        return "reviewed"
+    if row["stage"] == "human_review":
+        return "needs_review"
+    return "in_progress"
+
+
+def render_list_row(row, active_id):
+    case = store_mod.Case(row["id"], "visitor_family_visit", row["stage"],
+                          {}, {}, None)
+    active = " active" if row["id"] == active_id else ""
+    label, cls = review_badge(row["review_decision"], case.stage.value)
+    review_meta = row["review_created_at"] or "not reviewed"
+    return (
+        '<a class="{active}" href="/?case={id}">'
+        '<div class="case-id">{id}</div>'
+        '<div class="meta">stage: {stage} · updated {updated}</div>'
+        '<div class="badge-row"><span class="badge {cls}">{label}</span>'
+        '<span class="badge neutral">{review_meta}</span></div>'
+        '</a>'.format(
+            active=active,
+            id=esc(row["id"]),
+            stage=esc(case.stage.value),
+            updated=esc(row["updated_at"]),
+            cls=esc(cls),
+            label=esc(label),
+            review_meta=esc(review_meta)))
 
 
 def render_case(st, cl, case_id, query=None):
