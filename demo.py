@@ -240,7 +240,7 @@ def main(argv=None):
     except facts.FabricationError as exc:
         print("    -> BLOCKED: %s" % exc)
 
-    hr("9. DELIVERY PACK  -  four deliverables, code-rendered")
+    hr("9. DELIVERY PACK  -  one readable review pack, code-rendered")
     pack = deliver.build_pack(cl, c, narrative=NARRATIVE, today=TODAY)
     print("\n  -- personalised checklist --")
     for item in pack["document_checklist"]["items"]:
@@ -257,9 +257,15 @@ def main(argv=None):
     for row in pack["form_answers"]["rows"]:
         print("   %-38s %s" % (row["question"] + ":", row["answer"]))
     delivered = em.sink[-1]
-    print("\n  -- email attachments actually sent --")
-    for attachment in delivered["attachments"]:
-        print("   %s" % attachment["filename"])
+    review_pack = res["review_pack"]
+    print("\n  -- customer email attachments actually sent --")
+    if delivered["attachments"]:
+        for attachment in delivered["attachments"]:
+            print("   %s" % attachment["filename"])
+    else:
+        print("   none - customer is told the case is with a human adviser")
+    print("\n  -- internal adviser review pack assembled --")
+    print("   %s" % review_pack["filename"])
 
     hr("10. HUMAN REVIEW GATE")
     c = st.get_case("case-001")

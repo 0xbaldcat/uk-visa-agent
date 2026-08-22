@@ -230,3 +230,128 @@ def build_pack(checklist, case, narrative=None, today=None):
         "cover_letter": cover_letter(checklist, case, narrative=narrative),
         "qc_report": qc_report(checklist, case, today=today),
     }
+
+
+def render_pack_attachments(pack):
+    """Human-readable email attachments for the client/adviser handoff.
+
+    The pack stays structured for state, tests and audit. The email boundary
+    should look like a consultant handoff, not a debug dump.
+    """
+    return [
+        {"filename": "visa-application-review-pack.md",
+         "content_type": "text/markdown",
+         "content": render_review_pack(pack)},
+    ]
+
+
+def render_review_pack(pack):
+    sections = [
+        "# Visa Application Review Pack",
+        "",
+        ("Please review the facts in this pack and flag anything that is wrong. "
+         "A human adviser should review it before it is used for an application."),
+        "",
+        render_document_checklist(pack["document_checklist"]).strip(),
+        "",
+        render_form_answers(pack["form_answers"]).strip(),
+        "",
+        render_cover_letter(pack["cover_letter"]).strip(),
+        "",
+        render_qc_report(pack["qc_report"]).strip(),
+    ]
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def render_document_checklist(doc):
+    lines = ["# Personalised Document Checklist", "", "Route: %s" % doc["route"], ""]
+    for item in doc["items"]:
+        lines.append("## %s" % item["label"])
+        lines.append("- Status: %s" % item["status"].replace("_", " "))
+        if item.get("why"):
+            lines.append("- What to send: %s" % item["why"])
+        if item.get("source"):
+            lines.append("- Source: %s" % item["source"])
+        problems = item.get("problems") or []
+        if problems:
+            lines.append("- Issues:")
+            for problem in problems:
+                lines.append("  - %s" % problem.get("message"))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_form_answers(doc):
+    lines = ["# Application Form Answer Draft", "", doc.get("note") or "", ""]
+    for row in doc["rows"]:
+        answer = row.get("answer")
+        if answer is None:
+            answer = "[not yet collected]"
+        lines.append("- %s: %s" % (row["question"], answer))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_cover_letter(doc):
+    lines = [
+        "# Optional Cover Note Draft",
+        "",
+        ("This is not a required UK visitor visa document. It is an optional draft "
+         "for adviser review when a concise explanation of the applicant's facts "
+         "would help the final application package."),
+        "",
+    ]
+    if doc.get("applicant"):
+        lines.extend(["Applicant: %s" % doc["applicant"], ""])
+    for section in doc["sections"]:
+        lines.append("## %s" % section["heading"])
+        lines.append(section["body"])
+        lines.append("")
+    if doc.get("risks_not_yet_addressed"):
+        lines.append("## Adviser Notes")
+        lines.append("Risks not yet addressed in drafted narrative: %s" % (
+            ", ".join(doc["risks_not_yet_addressed"])))
+        lines.append("")
+    lines.append("## Disclaimer")
+    lines.append(doc["disclaimer"])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_qc_report(doc):
+    lines = ["# Quality Check Report", ""]
+    lines.append("- Generated on: %s" % doc["generated_on"])
+    lines.append("- Route: %s" % doc["route"])
+    lines.append("- Config version: %s" % doc["config_version"])
+    lines.append("- Pack complete: %s" % ("Yes" if doc["pack_complete"] else "No"))
+    lines.append("- Accepted: %s" % _comma_or_none(doc["accepted"]))
+    lines.append("- Outstanding: %s" % _comma_or_none(doc["outstanding"]))
+    lines.append("- Needs replacement: %s" % _comma_or_none(doc["needs_replacement"]))
+    funds = doc.get("funds_picture") or {}
+    if funds:
+        lines.append("")
+        lines.append("## Funds Picture")
+        lines.append("- Estimated trip cost: %s" % _value_or_unknown(funds.get("trip_cost")))
+        lines.append("- Evidenced balance: %s" % _value_or_unknown(funds.get("closing_balance")))
+        lines.append("- Note: %s" % funds.get("note"))
+    if doc.get("advisories"):
+        lines.append("")
+        lines.append("## Advisories")
+        for item in doc["advisories"]:
+            lines.append("- %s: %s" % (item.get("evidence"), item.get("message")))
+    if doc.get("risk_observations"):
+        lines.append("")
+        lines.append("## Risk Observations For Adviser Review")
+        for risk in doc["risk_observations"]:
+            lines.append("- %s: %s" % (risk.get("label"), risk.get("observation")))
+    lines.append("")
+    lines.append("## Limits")
+    for limit in doc["limits"]:
+        lines.append("- %s" % limit)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _comma_or_none(values):
+    return ", ".join(values) if values else "none"
+
+
+def _value_or_unknown(value):
+    return "unknown" if value is None else value

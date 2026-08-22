@@ -142,7 +142,7 @@ class Router(object):
              fallback_template="visa_docs_reminder", now=None):
         channel = self.route(action_kind)
         if channel is self.email:
-            return self.email.send(case_id, body, attachments=attachments)
+            return self.email.send(case_id, body, kind=action_kind, attachments=attachments)
         try:
             return self.whatsapp.send(case_id, body, kind="session", now=now)
         except OutsideWindow:

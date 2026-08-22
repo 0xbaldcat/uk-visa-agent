@@ -302,7 +302,7 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(saved.stage, state.Stage.HUMAN_REVIEW)
         self.assertEqual(state.next_action(saved, cl).kind, "await_human")
 
-    def test_deliver_pack_email_carries_four_rendered_deliverables(self):
+    def test_deliver_pack_hands_review_pack_to_human_not_customer(self):
         cl = load()
         st, case = make_case(evidence=COMPLETE_EVIDENCE)
         case.stage = state.Stage.COLLECTING
@@ -314,11 +314,18 @@ class TestDeterminism(unittest.TestCase):
         result = eng._respond(st.get_case("t1"), state.Action("deliver_pack"))
 
         self.assertEqual(result["sent"]["channel"], "email")
-        self.assertEqual(
-            [a["filename"] for a in result["sent"]["attachments"]],
-            ["personalised-checklist.json", "form-answers-draft.json",
-             "cover-letter-draft.json", "quality-check-report.json"])
+        self.assertEqual(result["sent"]["attachments"], [])
+        self.assertEqual(result["review_pack"]["filename"], "visa-application-review-pack.md")
+        self.assertEqual(result["review_pack"]["content_type"], "text/markdown")
+        content = result["review_pack"]["content"]
+        self.assertIn("# Visa Application Review Pack", content)
+        self.assertIn("# Personalised Document Checklist", content)
+        self.assertIn("# Application Form Answer Draft", content)
+        self.assertIn("# Optional Cover Note Draft", content)
+        self.assertIn("# Quality Check Report", content)
         self.assertEqual(email_sink[-1]["attachments"], result["sent"]["attachments"])
+        self.assertIn("passed it to a human adviser for review", result["sent"]["body"])
+        self.assertNotIn("attached review pack", result["sent"]["body"])
 
     def test_deliver_pack_degrades_when_narrative_model_refuses(self):
         cl = load()
@@ -330,15 +337,14 @@ class TestDeterminism(unittest.TestCase):
 
         result = eng._respond(st.get_case("t1"), state.Action("deliver_pack"))
         saved = st.get_case("t1")
-        cover = [
-            a["content"] for a in result["sent"]["attachments"]
-            if a["filename"] == "cover-letter-draft.json"
-        ][0]
+        content = result["review_pack"]["content"]
         audit_kinds = [row["kind"] for row in st.audit_trail("t1")]
 
         self.assertEqual(result["sent"]["channel"], "email")
+        self.assertEqual(result["sent"]["attachments"], [])
         self.assertEqual(saved.stage, state.Stage.HUMAN_REVIEW)
-        self.assertIn("long_stay", cover["risks_not_yet_addressed"])
+        self.assertIn("not a required UK visitor visa document", content)
+        self.assertIn("long_stay", content)
         self.assertIn("narrative_draft_refused", audit_kinds)
 
     def test_request_evidence_email_is_formatted_for_email_reading(self):
@@ -820,7 +826,7 @@ class TestDemoScripts(unittest.TestCase):
             cwd=root, check=True, text=True, capture_output=True)
         self.assertIn("EMAIL-ONLY FALLBACK", result.stdout)
         self.assertIn("[late chase] action=request_resupply via=email", result.stdout)
-        self.assertIn("personalised-checklist.json", result.stdout)
+        self.assertIn("visa-application-review-pack.md", result.stdout)
 
 
 class TestRealEmailAdapter(unittest.TestCase):
@@ -908,7 +914,9 @@ class TestEmailBridge(unittest.TestCase):
 
         self.assertEqual(results[-1]["action"].kind, "deliver_pack")
         self.assertEqual(st.get_case("t1").stage, state.Stage.HUMAN_REVIEW)
-        self.assertEqual(len(sink[-1]["attachments"]), 4)
+        self.assertEqual(sink[-1]["attachments"], [])
+        self.assertEqual(results[-1]["review_pack"]["filename"],
+                         "visa-application-review-pack.md")
         self.assertEqual(sink[-1]["in_reply_to"], "<client-1@example.test>")
         self.assertIn("<client-1@example.test>", sink[-1]["references"])
 
@@ -982,7 +990,9 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(results[-1]["action"].kind, "deliver_pack")
         self.assertEqual(st.get_case("t1").evidence["home_ties_evidence"]["fields"], {
             "tie_types": "apartment mortgage; elderly mother as dependant"})
-        self.assertEqual(len(sink[-1]["attachments"]), 4)
+        self.assertEqual(sink[-1]["attachments"], [])
+        self.assertEqual(results[-1]["review_pack"]["filename"],
+                         "visa-application-review-pack.md")
 
     def test_reply_header_mapping_resolves_case_without_subject_token(self):
         cl = load()

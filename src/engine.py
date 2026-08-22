@@ -232,8 +232,9 @@ class Engine(object):
     def _respond(self, case, action, now=None):
         body = compose.compose(action, self.checklist, case, model=self.model)
         attachments = None
+        review_pack = None
         if action.kind == "deliver_pack":
-            attachments = self._delivery_attachments(case)
+            review_pack = self._review_pack_attachment(case)
         outbox_id = self.store.enqueue(case.id, "auto", body, action_kind=action.kind)
         sent = None
         if self.router is not None:
@@ -241,13 +242,17 @@ class Engine(object):
             self.store.mark_sent(outbox_id)
         if action.kind == "deliver_pack":
             case.stage = state.transition(case.stage, Stage.ASSEMBLING)
-            self.store.log(case.id, "pack_assembled", {"outbox_id": outbox_id})
+            self.store.log(case.id, "pack_assembled", {
+                "outbox_id": outbox_id,
+                "internal_review_pack": review_pack["filename"],
+            })
             case.stage = state.transition(case.stage, Stage.HUMAN_REVIEW)
             self.store.log(case.id, "human_review_requested", {"outbox_id": outbox_id})
             self.store.save_case(case)
-        return {"action": action, "body": body, "sent": sent, "outbox_id": outbox_id}
+        return {"action": action, "body": body, "sent": sent,
+                "outbox_id": outbox_id, "review_pack": review_pack}
 
-    def _delivery_attachments(self, case):
+    def _review_pack_attachment(self, case):
         narrative = {}
         for risk in diagnose.active_risks(self.checklist, case):
             try:
@@ -267,20 +272,7 @@ class Engine(object):
             self.store.save_case(case)
             self.store.log(case.id, "delivery_blocked", {"reason": str(exc)})
             raise
-        return [
-            {"filename": "personalised-checklist.json",
-             "content_type": "application/json",
-             "content": pack["document_checklist"]},
-            {"filename": "form-answers-draft.json",
-             "content_type": "application/json",
-             "content": pack["form_answers"]},
-            {"filename": "cover-letter-draft.json",
-             "content_type": "application/json",
-             "content": pack["cover_letter"]},
-            {"filename": "quality-check-report.json",
-             "content_type": "application/json",
-             "content": pack["qc_report"]},
-        ]
+        return deliver.render_pack_attachments(pack)[0]
 
     # --- diagnosis surface ---------------------------------------------
 

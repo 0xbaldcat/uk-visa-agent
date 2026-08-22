@@ -50,8 +50,9 @@ python3 real_email_demo.py
 ```
 
 Set `VISA_AGENT_FETCH_UNSEEN=1` to also list unread replies from the test client
-mailbox after sending. The script sends the same four JSON deliverables used by
-the offline demo.
+mailbox after sending. The workflow assembles a human-readable adviser review
+pack, but the customer-facing completion email does not attach it before human
+review.
 
 For a real multi-turn mailbox path, run one poll cycle after sending an email to
 the agent mailbox:
@@ -90,7 +91,7 @@ catches an air ticket in the wrong name and sends it back.
 The walkthrough shows: intake, webhook de-duplication, risk diagnosis, a blocking
 validation failure, the WhatsApp 24-hour window forcing a template fallback,
 remediation, the computed QC report, the fabrication guard blocking invented
-figures, the four deliverables, and the human review gate.
+figures, the review pack, and the human review gate.
 
 ## Design
 

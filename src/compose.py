@@ -71,9 +71,9 @@ def compose(action, checklist, case, model=None):
 
     if kind == "deliver_pack":
         return ("That's everything on your list. I've put together your document "
-                "pack, a draft of your form answers, a draft cover letter and a "
-                "quality-check report. They're in your email. A human adviser "
-                "reviews these before you rely on them.")
+                "pack and passed it to a human adviser for review. You do not "
+                "need to do anything else right now. The adviser will send you "
+                "the final report or any follow-up questions after review.")
 
     if kind == "await_human":
         if action.reason == "pack_delivered":

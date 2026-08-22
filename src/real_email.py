@@ -142,6 +142,8 @@ class RealEmailChannel(object):
 def _subject_for(kind, attachments):
     if attachments:
         return "Document pack ready"
+    if kind == "deliver_pack":
+        return "Ready for adviser review"
     if kind == "request_resupply":
         return "Please replace one document"
     if kind == "request_evidence":

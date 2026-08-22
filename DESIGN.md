@@ -134,10 +134,11 @@ raw transcript.
 ### 3.4 The model writing the deliverable
 If the model writes the pack, "your application is complete" becomes an opinion.
 
-*Control:* all four deliverables are code-rendered from validated fields.
-`qc_report()` computes completeness. The model contributes narrative paragraphs
-only, and each is tagged `generated: true` so a reviewer can see exactly what it
-touched.
+*Control:* the review pack is code-rendered from validated fields. Internally it
+has four sections: checklist, form-answer draft, optional cover note draft and QC
+report. `qc_report()` computes completeness. The model contributes narrative
+paragraphs only, and each is tagged `generated: true` so a reviewer can see
+exactly what it touched.
 
 ### 3.5 Fabrication — the dangerous one
 A model trying to make a case look better may inflate a balance or upgrade a job
@@ -273,7 +274,7 @@ src/facts.py                      fabrication guard
 src/ingress.py                    structured event validation, repair, trace object
 src/llm.py                        model seam: 3 jobs, schema-checked returns
 src/compose.py                    action -> words
-src/deliver.py                    the four deliverables
+src/deliver.py                    structured deliverables and review-pack rendering
 src/channels.py                   WhatsApp window, in-memory email, router
 src/real_email.py                 optional SMTP/IMAP adapter for live walkthroughs
 src/email_bridge.py               raw .eml / IMAP -> Engine bridge
