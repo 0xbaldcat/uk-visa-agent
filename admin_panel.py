@@ -64,6 +64,22 @@ main { padding: 22px 24px 40px; max-width: 1280px; margin: 0 auto; }
 .list a.active { background: #eaf1ed; }
 .case-id { font-weight: 650; overflow-wrap: anywhere; }
 .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eef0ec;
+  color: #4e5853;
+}
+.badge.todo { background: #fff2cf; color: #6d4900; }
+.badge.good { background: #dcefe6; color: #164938; }
+.badge.follow { background: #fde3df; color: #8f2d22; }
+.badge.neutral { background: #e8ebee; color: #4c5661; }
 .content { padding: 18px; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .metric { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
@@ -138,8 +154,21 @@ def load_checklist():
 
 def case_rows(st):
     return st.conn.execute(
-        "SELECT id, stage, slots, evidence, updated_at FROM cases "
-        "ORDER BY CASE WHEN stage = 'human_review' THEN 0 ELSE 1 END, updated_at DESC"
+        "SELECT c.id, c.stage, c.slots, c.evidence, c.updated_at, "
+        "ar.decision AS review_decision, ar.created_at AS review_created_at, "
+        "ar.note AS review_note "
+        "FROM cases c "
+        "LEFT JOIN adviser_reviews ar ON ar.id = ("
+        "  SELECT max(id) FROM adviser_reviews WHERE case_id = c.id"
+        ") "
+        "ORDER BY "
+        "CASE "
+        "  WHEN c.stage = 'human_review' AND ar.decision IS NULL THEN 0 "
+        "  WHEN ar.decision = 'needs_client_follow_up' THEN 1 "
+        "  WHEN ar.decision = 'approved_for_final_report' THEN 2 "
+        "  WHEN c.stage = 'human_review' THEN 3 "
+        "  ELSE 4 "
+        "END, c.updated_at DESC"
     ).fetchall()
 
 
@@ -167,6 +196,16 @@ def status_class(value):
     if value in ("accepted_with_note", "collecting", "remediation"):
         return "warn"
     return ""
+
+
+def review_badge(decision, stage):
+    if decision == "approved_for_final_report":
+        return "Approved", "good"
+    if decision == "needs_client_follow_up":
+        return "Needs follow-up", "follow"
+    if stage == "human_review":
+        return "Needs review", "todo"
+    return "In progress", "neutral"
 
 
 def esc(value):
@@ -200,15 +239,22 @@ def render_list(rows, active_id):
         case = store_mod.Case(row["id"], "visitor_family_visit", row["stage"],
                               {}, {}, None)
         active = " active" if row["id"] == active_id else ""
+        label, cls = review_badge(row["review_decision"], case.stage.value)
+        review_meta = row["review_created_at"] or "not reviewed"
         links.append(
             '<a class="{active}" href="/?case={id}">'
             '<div class="case-id">{id}</div>'
             '<div class="meta">stage: {stage} · updated {updated}</div>'
+            '<div class="badge-row"><span class="badge {cls}">{label}</span>'
+            '<span class="badge neutral">{review_meta}</span></div>'
             '</a>'.format(
                 active=active,
                 id=esc(row["id"]),
                 stage=esc(case.stage.value),
-                updated=esc(row["updated_at"])))
+                updated=esc(row["updated_at"]),
+                cls=esc(cls),
+                label=esc(label),
+                review_meta=esc(review_meta)))
     return '<div class="panel list">%s</div>' % "".join(links)
 
 

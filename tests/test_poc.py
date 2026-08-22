@@ -846,6 +846,8 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Visa Application Review Pack", html_body)
         self.assertIn("Approve for final report", html_body)
         self.assertIn("Needs client follow-up", html_body)
+        self.assertIn("Needs review", html_body)
+        self.assertIn("not reviewed", html_body)
 
     def test_admin_panel_shows_saved_decision_feedback(self):
         cl = load()
@@ -860,6 +862,34 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Review decision recorded: approved for final report", html_body)
         self.assertIn("Review History", html_body)
         self.assertIn("approved_for_final_report", html_body)
+        self.assertIn("Approved", html_body)
+
+    def test_admin_panel_case_list_distinguishes_review_states(self):
+        cl = load()
+        st = store_mod.Store()
+        case_a = st.create_case("case-needs-review", "visitor_family_visit")
+        case_a.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case_a)
+        case_b = st.create_case("case-approved", "visitor_family_visit")
+        case_b.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case_b)
+        st.record_adviser_review("case-approved", "approved_for_final_report",
+                                  reviewer="test")
+        case_c = st.create_case("case-follow-up", "visitor_family_visit")
+        case_c.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case_c)
+        st.record_adviser_review("case-follow-up", "needs_client_follow_up",
+                                  reviewer="test")
+
+        html_body = admin_panel.render_app(st, cl, {})
+
+        self.assertIn("Needs review", html_body)
+        self.assertIn("Needs follow-up", html_body)
+        self.assertIn("Approved", html_body)
+        self.assertLess(html_body.index("case-needs-review"),
+                        html_body.index("case-follow-up"))
+        self.assertLess(html_body.index("case-follow-up"),
+                        html_body.index("case-approved"))
 
     def test_adviser_review_decision_is_persisted(self):
         st, case = make_case(evidence=COMPLETE_EVIDENCE)
