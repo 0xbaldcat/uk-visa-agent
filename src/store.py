@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS email_message_cases (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS email_sender_cases (
+    sender TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (sender, case_id)
+);
+
 CREATE TABLE IF NOT EXISTS ingress_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT NOT NULL,
@@ -190,6 +198,7 @@ class Store(object):
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._ensure_trace_columns()
+        self._backfill_email_sender_cases()
         self.conn.commit()
 
     # --- cases ----------------------------------------------------------
@@ -345,6 +354,30 @@ class Store(object):
             (message_id,)).fetchone()
         return None if row is None else row["case_id"]
 
+    def remember_email_sender(self, sender, case_id):
+        if not sender:
+            return
+        normalized = sender.strip().lower()
+        if not normalized:
+            return
+        self.conn.execute(
+            "INSERT INTO email_sender_cases (sender, case_id) VALUES (?, ?) "
+            "ON CONFLICT(sender, case_id) DO UPDATE SET last_seen_at=datetime('now')",
+            (normalized, case_id))
+        self.conn.commit()
+
+    def active_cases_for_email_sender(self, sender):
+        if not sender:
+            return []
+        normalized = sender.strip().lower()
+        rows = self.conn.execute(
+            "SELECT esc.case_id FROM email_sender_cases esc "
+            "JOIN cases c ON c.id = esc.case_id "
+            "WHERE esc.sender = ? AND c.stage NOT IN (?, ?) "
+            "ORDER BY esc.last_seen_at DESC, esc.created_at DESC",
+            (normalized, Stage.HUMAN_REVIEW.value, Stage.ESCALATED.value)).fetchall()
+        return [row["case_id"] for row in rows]
+
     def _ensure_trace_columns(self):
         columns = set(row["name"] for row in self.conn.execute(
             "PRAGMA table_info(document_extraction_events)").fetchall())
@@ -358,3 +391,15 @@ class Store(object):
                 self.conn.execute(
                     "ALTER TABLE document_extraction_events ADD COLUMN %s %s" % (
                         name, ddl))
+
+    def _backfill_email_sender_cases(self):
+        rows = self.conn.execute(
+            "SELECT case_id, detail FROM audit WHERE kind = 'case_routed'").fetchall()
+        for row in rows:
+            try:
+                detail = json.loads(row["detail"] or "{}")
+            except ValueError:
+                continue
+            sender = detail.get("from")
+            if sender:
+                self.remember_email_sender(sender, row["case_id"])

@@ -1064,6 +1064,77 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(st.get_case(case_id).slots["employment_status"], "employed")
         self.assertEqual(st.get_case(case_id).slots["estimated_trip_cost_gbp"], 5000.0)
 
+    def test_unthreaded_email_from_known_sender_uses_single_active_case(self):
+        cl = load()
+        evidence = dict(COMPLETE_EVIDENCE)
+        del evidence["bank_statements"]
+        st, case = make_case(evidence=evidence)
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        st.remember_email_sender("client@example.test", "t1")
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        model = llm.StubModel(documents={"bank_statements.pdf": {
+            "account_holder_name": "Mei Ling Chen", "period_start": "2026-02-10",
+            "period_end": "2026-08-18", "closing_balance": "5100.00",
+            "currency": "GBP"}})
+        eng = engine_mod.Engine(st, cl, model, router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<client-unthreaded-bank@example.test>",
+            subject="documents",
+            body="Attached.",
+            attachments=[("bank_statements.pdf", "application/pdf", b"PDFDATA")])])
+
+        self.assertEqual(st.conn.execute("select count(*) n from cases").fetchone()["n"], 1)
+        self.assertIn("bank_statements", st.get_case("t1").evidence)
+        self.assertEqual(results[-1]["sent"]["case_id"], "t1")
+
+    def test_store_backfills_email_sender_mapping_from_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "cases.sqlite3")
+            st1 = store_mod.Store(db_path)
+            st1.create_case("t1", "visitor_family_visit")
+            st1.log("t1", "case_routed", {
+                "source": "new_email",
+                "from": "Client@Example.Test",
+                "message_id": "<client-first@example.test>",
+            })
+
+            st2 = store_mod.Store(db_path)
+
+            self.assertEqual(st2.active_cases_for_email_sender("client@example.test"), ["t1"])
+
+    def test_unthreaded_email_from_sender_with_multiple_active_cases_creates_new_case(self):
+        cl = load()
+        st = store_mod.Store()
+        st.create_case("t1", "visitor_family_visit")
+        st.create_case("t2", "visitor_family_visit")
+        st.remember_email_sender("client@example.test", "t1")
+        st.remember_email_sender("client@example.test", "t2")
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<client-ambiguous@example.test>",
+            subject="new visa request",
+            body=("Hi, my name is Mei Ling Chen. I have a Chinese passport and "
+                  "want to visit my sister in the UK from 2026-10-05 to 2027-01-03."))])
+
+        cases = st.conn.execute("select id from cases order by id").fetchall()
+        self.assertEqual(len(cases), 3)
+        self.assertTrue(results[-1]["sent"]["case_id"].startswith("case_"))
+        self.assertIsNone(st.get_case("t1").slots.get("applicant_name"))
+        self.assertIsNone(st.get_case("t2").slots.get("applicant_name"))
+
     def test_empty_case_can_complete_intake_from_ten_plain_email_replies(self):
         cl = load()
         st, case = make_case(slots={})

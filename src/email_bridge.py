@@ -193,16 +193,37 @@ class EmailPoller(object):
     def resolve_case(self, parsed):
         if parsed.case_id:
             self._ensure_case(parsed.case_id, "subject_token")
+            self._remember_sender(parsed.from_addr, parsed.case_id)
             return parsed.case_id
         for message_id in [parsed.in_reply_to] + list(parsed.references):
             if message_id and message_id in self.message_to_case:
-                return self.message_to_case[message_id]
+                case_id = self.message_to_case[message_id]
+                self._remember_sender(parsed.from_addr, case_id)
+                return case_id
             if hasattr(self.store, "case_for_email_message"):
                 case_id = self.store.case_for_email_message(message_id)
                 if case_id:
+                    self._remember_sender(parsed.from_addr, case_id)
                     return case_id
+        if hasattr(self.store, "active_cases_for_email_sender"):
+            case_ids = self.store.active_cases_for_email_sender(parsed.from_addr)
+            if len(case_ids) == 1:
+                self.store.log(case_ids[0], "case_routed", {
+                    "source": "sender_active_case",
+                    "from": parsed.from_addr,
+                    "message_id": parsed.message_id,
+                })
+                self._remember_sender(parsed.from_addr, case_ids[0])
+                return case_ids[0]
+            if len(case_ids) > 1:
+                self.store.log(case_ids[0], "email_sender_route_ambiguous", {
+                    "from": parsed.from_addr,
+                    "message_id": parsed.message_id,
+                    "candidate_case_ids": case_ids,
+                })
         if self.default_case_id:
             self._ensure_case(self.default_case_id, "default_case")
+            self._remember_sender(parsed.from_addr, self.default_case_id)
             return self.default_case_id
         return self._create_case(parsed)
 
@@ -219,7 +240,12 @@ class EmailPoller(object):
             "from": parsed.from_addr,
             "message_id": parsed.message_id,
         })
+        self._remember_sender(parsed.from_addr, case_id)
         return case_id
+
+    def _remember_sender(self, sender, case_id):
+        if hasattr(self.store, "remember_email_sender"):
+            self.store.remember_email_sender(sender, case_id)
 
     def _set_thread_context(self, case_id, parsed):
         channel = getattr(getattr(self.engine, "router", None), "email", None)
