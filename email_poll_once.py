@@ -6,9 +6,10 @@ offline demo; SMTP/IMAP credentials come from `VISA_AGENT_*` environment vars.
 
 For document extraction in a no-LLM local demo, attach PDF/DOCX/text files whose
 filenames start with the evidence id, e.g. `passport.pdf` or
-`home_ties_evidence.docx`. Text PDFs and DOCX files can be parsed locally; scanned
-PDFs/images need an OCR adapter or a same-path `.ocr.txt` sidecar during local
-testing. JSON field files remain supported as a developer shortcut.
+`home_ties_evidence.docx`. Text PDFs and DOCX files can be parsed locally.
+Scanned PDFs/images use OCR when `VISA_AGENT_BAIDU_OCR_*` is configured; `.ocr.txt`
+sidecars are only for offline fixture tests. JSON field files remain supported as
+a developer shortcut.
 """
 import os
 import sys

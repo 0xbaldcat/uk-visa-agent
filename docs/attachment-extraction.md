@@ -32,9 +32,10 @@ Failure:
 - `.txt`, `.text`, `.md`, `.csv`: direct text parsing.
 - `.docx`: reads `word/document.xml` body text.
 - `.pdf`: parses visible text from simple text PDFs. Scanned or compressed PDFs
-  need OCR.
-- images and scanned PDFs: use a same-path `.ocr.txt` sidecar in local tests, or
-  plug in a real OCR adapter.
+  fall back to OCR when configured.
+- images and scanned PDFs: use Baidu OCR in live mode when
+  `VISA_AGENT_BAIDU_OCR_API_KEY` and `VISA_AGENT_BAIDU_OCR_SECRET_KEY` are set.
+  Same-path `.ocr.txt` sidecars are only for deterministic offline tests.
 
 For example, if the saved attachment is:
 
@@ -42,7 +43,7 @@ For example, if the saved attachment is:
 inbound-attachments/case-001/0-passport.jpg
 ```
 
-the local extractor will use this sidecar if present:
+the local extractor can use this sidecar in offline tests:
 
 ```text
 inbound-attachments/case-001/0-passport.jpg.ocr.txt
@@ -87,5 +88,6 @@ the email bridge maps attachments to checklist items from filename aliases.
 eight items required by the demo applicant. The set mixes native-text PDFs,
 scanned PDFs, DOCX files and PNG images. `manifest.yaml` is executable test data:
 the unit suite checks each file's extracted fields and blocking failure kinds
-against it. Scanned/image fixtures use deterministic `.ocr.txt` sidecars until
-the Baidu OCR adapter is configured.
+against it. Scanned/image fixtures use deterministic `.ocr.txt` sidecars in
+offline tests; live email uses the Baidu OCR adapter so a client only sends the
+original PDF/image attachment.

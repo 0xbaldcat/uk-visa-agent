@@ -327,8 +327,20 @@ class TestDeterminism(unittest.TestCase):
         body = compose.compose(state.Action("request_evidence", evidence_id="passport"),
                                cl, case)
 
-        self.assertIn("Next I need:\n- Passport biographic page", body)
-        self.assertIn("\n\nWhy this matters:\n", body)
+        self.assertIn("Here is what I still need", body)
+        self.assertIn("- Passport biographic page", body)
+        self.assertIn("- Personal bank statements", body)
+        self.assertIn("  Note: Identity and travel history", body)
+
+    def test_request_evidence_email_lists_only_remaining_materials(self):
+        cl = load()
+        _, case = make_case(evidence={"passport": COMPLETE_EVIDENCE["passport"]})
+        body = compose.compose(state.Action("request_evidence", evidence_id="bank_statements"),
+                               cl, case)
+
+        self.assertNotIn("- Passport biographic page", body)
+        self.assertIn("- Personal bank statements", body)
+        self.assertIn("- Travel booking or itinerary", body)
 
 
 class TestModelBoundary(unittest.TestCase):
@@ -419,6 +431,53 @@ class TestDocumentExtraction(unittest.TestCase):
 
         self.assertEqual(
             fields, {"tie_types": "apartment mortgage; elderly mother as dependant"})
+
+    def test_scanned_pdf_without_sidecar_does_not_parse_binary_noise(self):
+        source = os.path.join(
+            os.path.dirname(HERE), "fixtures", "realistic-materials",
+            "pass", "passport-pass-scanned.pdf")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "passport.pdf")
+            with open(source, "rb") as src, open(path, "wb") as dst:
+                dst.write(src.read())
+
+            with self.assertRaises(llm.ModelRefusal):
+                document_extract.LocalDocumentTextExtractor().extract_text(path)
+
+    def test_scanned_pdf_without_sidecar_uses_ocr_fallback(self):
+        class FakeOcrExtractor(document_extract.DocumentTextExtractor):
+            def __init__(self):
+                self.paths = []
+
+            def can_extract(self, path):
+                return path.endswith(".pdf")
+
+            def extract_text(self, path):
+                self.paths.append(path)
+                return "\n".join([
+                    "Holder Name: Mei Ling Chen",
+                    "Passport Number: EK1234567",
+                    "Expiry Date: 2029-04-30",
+                ])
+
+        source = os.path.join(
+            os.path.dirname(HERE), "fixtures", "realistic-materials",
+            "pass", "passport-pass-scanned.pdf")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "passport.pdf")
+            with open(source, "rb") as src, open(path, "wb") as dst:
+                dst.write(src.read())
+            ocr = FakeOcrExtractor()
+            extractor = document_extract.HybridDocumentTextExtractor(
+                ocr_extractor=ocr)
+
+            fields = document_extract.extract_fields_from_file(
+                path, ["holder_name", "passport_number", "expiry_date"],
+                text_extractor=extractor)
+
+        self.assertEqual(ocr.paths, [path])
+        self.assertEqual(fields["holder_name"], "Mei Ling Chen")
+        self.assertEqual(fields["passport_number"], "EK1234567")
 
 
 class TestLLMIngress(unittest.TestCase):

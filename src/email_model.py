@@ -25,7 +25,7 @@ QUOTE_CUTOFFS = [
 class EmailDemoModel(llm.StubModel):
     def __init__(self, text_extractor=None, intake_client=None):
         super(EmailDemoModel, self).__init__()
-        self.text_extractor = text_extractor or document_extract.LocalDocumentTextExtractor()
+        self.text_extractor = text_extractor or document_extract.text_extractor_from_env()
         self.intake_client = intake_client
 
     def parse_reply(self, text, expected_slot, slot_spec):

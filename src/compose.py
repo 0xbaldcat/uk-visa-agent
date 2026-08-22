@@ -41,12 +41,22 @@ def compose(action, checklist, case, model=None):
             "prompt_hint", action.slot.replace("_", " "))
 
     if kind == "request_evidence":
-        ev = checklist.evidence(action.evidence_id) or {}
-        line = "Next I need:\n- %s" % ev.get("label", action.evidence_id)
-        why = _why(ev)
-        if why:
-            return "%s\n\nWhy this matters:\n%s" % (line, why)
-        return line
+        items = _missing_evidence_items(checklist, case)
+        if not items:
+            items = [checklist.evidence(action.evidence_id) or {
+                "id": action.evidence_id,
+                "label": action.evidence_id,
+            }]
+        lines = [
+            "Here is what I still need for your visa materials. Please send whichever files you already have; I will check them one by one.",
+            "",
+        ]
+        for ev in items:
+            lines.append("- %s" % ev.get("label", ev.get("id")))
+            why = _why(ev)
+            if why:
+                lines.append("  Note: %s" % why)
+        return "\n".join(lines)
 
     if kind == "request_resupply":
         ev = checklist.evidence(action.evidence_id) or {}
@@ -81,3 +91,11 @@ def compose(action, checklist, case, model=None):
 def risk_prompt(risk):
     """The one client-facing sentence a risk factor is allowed to produce."""
     return risk["ask"]
+
+
+def _missing_evidence_items(checklist, case):
+    supplied = getattr(case, "evidence", {}) or {}
+    return [
+        ev for ev in checklist.required_evidence(getattr(case, "slots", {}) or {})
+        if ev["id"] not in supplied
+    ]
