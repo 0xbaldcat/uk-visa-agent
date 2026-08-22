@@ -9,6 +9,7 @@ import os
 import re
 from dataclasses import dataclass
 from email import policy
+from email.utils import parseaddr
 from email.parser import BytesParser
 from typing import List, Optional, Dict, Any
 
@@ -40,6 +41,7 @@ class ParsedAttachment:
 
 @dataclass
 class ParsedEmail:
+    from_addr: str
     message_id: str
     subject: str
     body: str
@@ -68,6 +70,7 @@ def parse_email(raw):
     in_reply_to = _first_message_id(msg.get("In-Reply-To"))
     case_id = case_from_subject(subject)
     return ParsedEmail(
+        from_addr=parseaddr(msg.get("From", ""))[1],
         message_id=_first_message_id(msg.get("Message-ID")) or _fallback_id(subject, body),
         subject=subject,
         body=body.strip(),
@@ -205,7 +208,8 @@ class EmailPoller(object):
             if parsed.message_id not in references:
                 references.append(parsed.message_id)
             channel.set_thread_context(
-                case_id, in_reply_to=parsed.message_id, references=references)
+                case_id, in_reply_to=parsed.message_id, references=references,
+                to_addr=parsed.from_addr or None)
 
     def _document_ref(self, case_id, parsed, attachment, index):
         if not self.attachment_dir:

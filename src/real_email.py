@@ -93,10 +93,11 @@ class RealEmailChannel(object):
         self.settings = settings
         self._thread_context = {}
 
-    def set_thread_context(self, case_id, in_reply_to=None, references=None):
+    def set_thread_context(self, case_id, in_reply_to=None, references=None, to_addr=None):
         self._thread_context[case_id] = {
             "in_reply_to": in_reply_to,
             "references": list(references or []),
+            "to_addr": to_addr,
         }
 
     def send(self, case_id, body, kind="session", attachments=None):
@@ -105,8 +106,21 @@ class RealEmailChannel(object):
         if context.get("in_reply_to") and context["in_reply_to"] not in references:
             references.append(context["in_reply_to"])
         subject = "[visa-agent:%s] %s" % (case_id, _subject_for(kind, attachments))
+        settings = self.settings
+        if context.get("to_addr"):
+            settings = EmailSettings(
+                smtp_host=self.settings.smtp_host,
+                smtp_port=self.settings.smtp_port,
+                imap_host=self.settings.imap_host,
+                imap_port=self.settings.imap_port,
+                username=self.settings.username,
+                password=self.settings.password,
+                from_addr=self.settings.from_addr,
+                to_addr=context["to_addr"],
+                use_tls=self.settings.use_tls,
+            )
         msg = build_message(
-            self.settings, subject, body, attachments=attachments,
+            settings, subject, body, attachments=attachments,
             in_reply_to=context.get("in_reply_to"), references=references)
         with smtplib.SMTP(self.settings.smtp_host, self.settings.smtp_port, timeout=30) as smtp:
             if self.settings.use_tls:

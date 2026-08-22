@@ -40,10 +40,11 @@ class EmailChannel(Channel):
         self.sink = sink if sink is not None else []
         self._thread_context = {}
 
-    def set_thread_context(self, case_id, in_reply_to=None, references=None):
+    def set_thread_context(self, case_id, in_reply_to=None, references=None, to_addr=None):
         self._thread_context[case_id] = {
             "in_reply_to": in_reply_to,
             "references": list(references or []),
+            "to_addr": to_addr,
         }
 
     def send(self, case_id, body, kind="session", attachments=None):
@@ -56,7 +57,8 @@ class EmailChannel(Channel):
                "attachments": list(attachments or []),
                "message_id": message_id,
                "in_reply_to": context.get("in_reply_to"),
-               "references": references}
+               "references": references,
+               "to_addr": context.get("to_addr")}
         self.sink.append(msg)
         return msg
 

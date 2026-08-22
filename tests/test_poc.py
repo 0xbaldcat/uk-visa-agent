@@ -736,6 +736,7 @@ class TestEmailBridge(unittest.TestCase):
 
         self.assertEqual(st.get_case("t1").slots["applicant_name"], "Mei Ling Chen")
         self.assertEqual(results[-1]["sent"]["in_reply_to"], "<client-reply@example.test>")
+        self.assertEqual(results[-1]["sent"]["to_addr"], "client@example.test")
 
     def test_empty_case_can_complete_intake_from_ten_plain_email_replies(self):
         cl = load()
