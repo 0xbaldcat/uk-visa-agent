@@ -205,7 +205,8 @@ class EmailPoller(object):
                 if case_id:
                     self._remember_sender(parsed.from_addr, case_id)
                     return case_id
-        if hasattr(self.store, "active_cases_for_email_sender"):
+        if (self._can_route_unthreaded_to_active(parsed)
+                and hasattr(self.store, "active_cases_for_email_sender")):
             case_ids = self.store.active_cases_for_email_sender(parsed.from_addr)
             if len(case_ids) == 1:
                 self.store.log(case_ids[0], "case_routed", {
@@ -226,6 +227,17 @@ class EmailPoller(object):
             self._remember_sender(parsed.from_addr, self.default_case_id)
             return self.default_case_id
         return self._create_case(parsed)
+
+    def _can_route_unthreaded_to_active(self, parsed):
+        """Use sender fallback only for unthreaded document drops.
+
+        A plain text email without reply headers is more likely a new enquiry.
+        Attachment-only/new-subject messages are common when clients gather files
+        on a phone and send them outside the original thread.
+        """
+        if parsed.in_reply_to or parsed.references:
+            return False
+        return any(attachment.evidence_id is not None for attachment in parsed.attachments)
 
     def _ensure_case(self, case_id, source):
         if self.store.get_case(case_id) is None:

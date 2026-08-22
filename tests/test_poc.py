@@ -1320,6 +1320,32 @@ class TestEmailBridge(unittest.TestCase):
         self.assertIn("bank_statements", st.get_case("t1").evidence)
         self.assertEqual(results[-1]["sent"]["case_id"], "t1")
 
+    def test_unthreaded_plain_text_from_known_sender_creates_new_case(self):
+        cl = load()
+        st, case = make_case(slots={})
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        st.remember_email_sender("client@example.test", "t1")
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<client-second-new-case@example.test>",
+            subject="",
+            body=("Hi, my name is Mei Ling Chen. I have a Chinese passport and "
+                  "want to apply for a UK visitor visa from 2026-10-05 to 2027-01-03."))])
+
+        cases = st.conn.execute("select id from cases order by id").fetchall()
+        self.assertEqual(len(cases), 2)
+        self.assertTrue(results[-1]["sent"]["case_id"].startswith("case_"))
+        self.assertNotEqual(results[-1]["sent"]["case_id"], "t1")
+        self.assertEqual(st.get_case("t1").slots, {})
+
     def test_store_backfills_email_sender_mapping_from_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "cases.sqlite3")
