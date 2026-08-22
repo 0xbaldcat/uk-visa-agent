@@ -154,11 +154,11 @@ def _subject_for(kind, attachments):
 
 
 def _thread_subject(context, case_id, kind, attachments):
-    if context.get("in_reply_to") and context.get("subject"):
+    if context.get("in_reply_to") and context.get("subject") is not None:
         subject = context["subject"].strip()
         if subject.lower().startswith("re:"):
             return subject
-        return "Re: %s" % subject
+        return "Re: %s" % subject if subject else ""
     return "[visa-agent:%s] %s" % (case_id, _subject_for(kind, attachments))
 
 

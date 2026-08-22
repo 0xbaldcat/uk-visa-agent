@@ -1221,6 +1221,30 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(results[-1]["sent"]["subject"], "Re: UK visa help")
         self.assertEqual(st.case_for_email_message(sink[-1]["message_id"]), case_id)
 
+    def test_new_email_with_blank_subject_replies_with_blank_subject(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<blank-subject-new-client@example.test>",
+            subject="",
+            body=("Hi, my name is Mei Ling Chen. I want to apply for a UK visitor "
+                  "visa to visit my sister in the UK. What documents do I need?"))])
+
+        self.assertEqual(len(st.conn.execute("select id from cases").fetchall()), 1)
+        self.assertEqual(results[-1]["sent"]["subject"], "")
+        self.assertEqual(results[-1]["sent"]["in_reply_to"],
+                         "<blank-subject-new-client@example.test>")
+        self.assertEqual(st.case_for_email_message(sink[-1]["message_id"]),
+                         results[-1]["sent"]["case_id"])
+
     def test_reply_to_auto_created_case_uses_persisted_message_map(self):
         cl = load()
         st = store_mod.Store()
