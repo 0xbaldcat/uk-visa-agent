@@ -8,6 +8,7 @@ now use PDF/DOCX/image files once OCR text is available.
 import json
 import os
 import re
+import socket
 import urllib.error
 import urllib.request
 
@@ -149,7 +150,7 @@ class ChatCompletionsIntakeClient(object):
                 })
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 raw = json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, ValueError, KeyError) as exc:
+        except (urllib.error.URLError, TimeoutError, socket.timeout, ValueError, KeyError) as exc:
             raise llm.ModelRefusal("LLM intake parse failed: %s" % exc)
         try:
             content = raw["choices"][0]["message"]["content"]

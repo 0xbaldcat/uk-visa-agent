@@ -58,15 +58,21 @@ class IntakeIngressInterpreter(object):
         attempts = 0
         if rejected and attempts < self.max_repairs and hasattr(self.repair_parser, "repair_intake_candidate"):
             attempts += 1
-            repaired = self.repair_parser.repair_intake_candidate(
-                text, slot_specs, candidate, errors, accepted)
-            r_accepted, r_rejected, r_errors = validate_candidate(repaired, slot_specs)
-            for key, value in r_accepted.items():
-                if key not in accepted:
-                    accepted[key] = value
-            rejected = dict((k, v) for k, v in r_rejected.items() if k not in accepted)
-            errors = r_errors
-            candidate = repaired
+            try:
+                repaired = self.repair_parser.repair_intake_candidate(
+                    text, slot_specs, candidate, errors, accepted)
+                r_accepted, r_rejected, r_errors = validate_candidate(repaired, slot_specs)
+                for key, value in r_accepted.items():
+                    if key not in accepted:
+                        accepted[key] = value
+                rejected = dict((k, v) for k, v in r_rejected.items() if k not in accepted)
+                errors = r_errors
+                candidate = repaired
+            except llm.ModelRefusal as exc:
+                errors = list(errors) + [{
+                    "field": "_repair",
+                    "error": str(exc),
+                }]
 
         if accepted and rejected:
             status = "partially_applied"

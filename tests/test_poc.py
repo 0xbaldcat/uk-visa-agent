@@ -610,6 +610,29 @@ class TestLLMIngress(unittest.TestCase):
         self.assertEqual(result.rejected_json, {"employment_status": "freelancer contractor"})
         self.assertEqual(result.repair_attempts, 1)
 
+    def test_ingress_repair_timeout_keeps_accepted_fields(self):
+        cl = load()
+
+        class TimeoutRepairParser(object):
+            model_name = "timeout-repair-test"
+            def parse_intake_candidate(self, text, slot_specs):
+                return {
+                    "applicant_name": "Mei Ling Chen",
+                    "employment_status": "contractor",
+                }
+            def repair_intake_candidate(self, text, slot_specs, candidate, errors, accepted):
+                raise llm.ModelRefusal("LLM intake parse failed: timed out")
+
+        result = ingress.IntakeIngressInterpreter(TimeoutRepairParser()).parse(
+            "My name is Mei Ling Chen and I am a contractor.",
+            [cl.slot("applicant_name"), cl.slot("employment_status")])
+
+        self.assertEqual(result.status, "partially_applied")
+        self.assertEqual(result.accepted_json, {"applicant_name": "Mei Ling Chen"})
+        self.assertEqual(result.rejected_json, {"employment_status": "contractor"})
+        self.assertEqual(result.repair_attempts, 1)
+        self.assertEqual(result.validation_errors[-1]["field"], "_repair")
+
     def test_store_has_production_trace_tables(self):
         st = store_mod.Store()
         tables = set(row["name"] for row in st.conn.execute(
@@ -1200,6 +1223,46 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(st.conn.execute("select count(*) n from cases").fetchone()["n"], 1)
         self.assertEqual(st.get_case(case_id).slots["employment_status"], "employed")
         self.assertEqual(st.get_case(case_id).slots["estimated_trip_cost_gbp"], 5000.0)
+
+    def test_intake_repair_failure_does_not_block_email_response(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+
+        class RepairFailingIntakeClient(object):
+            model_name = "repair-failing-intake"
+            def parse_intake_candidate(self, text, slot_specs):
+                return {
+                    "applicant_name": "Mei Ling Chen",
+                    "employment_status": "contractor",
+                }
+            def repair_intake_candidate(self, text, slot_specs, candidate, errors, accepted):
+                raise llm.ModelRefusal("LLM intake parse failed: timed out")
+
+        eng = engine_mod.Engine(
+            st, cl, email_model.EmailDemoModel(
+                intake_client=RepairFailingIntakeClient()),
+            router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<repair-timeout@example.test>",
+            subject="UK visa help",
+            body="Hi, my name is Mei Ling Chen. I work as a contractor.")])
+        case_id = st.conn.execute("select id from cases").fetchone()["id"]
+
+        self.assertTrue(results)
+        self.assertEqual(st.get_case(case_id).slots["applicant_name"], "Mei Ling Chen")
+        self.assertNotIn("employment_status", st.get_case(case_id).slots)
+        self.assertIn("What nationality is your passport?", sink[-1]["body"])
+        trace = st.conn.execute(
+            "select status, validation_errors from ingress_events where case_id = ?",
+            (case_id,)).fetchone()
+        self.assertEqual(trace["status"], "partially_applied")
+        self.assertIn("_repair", trace["validation_errors"])
 
     def test_unthreaded_email_from_known_sender_uses_single_active_case(self):
         cl = load()
