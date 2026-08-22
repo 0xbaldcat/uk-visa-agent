@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 
@@ -18,6 +19,7 @@ import channels
 import checklist as checklist_mod
 import deliver
 import diagnose
+import document_extract
 import email_bridge
 import email_model
 import engine as engine_mod
@@ -92,6 +94,28 @@ class FileAwareModel(llm.StubModel):
                 assert fh.read() == b"PDFDATA"
             return {"tie_types": "apartment mortgage; elderly mother as dependant"}
         return super().extract_fields(document, wanted_fields)
+
+
+def simple_pdf_bytes(lines):
+    text = "\\n".join(lines)
+    stream = "BT /F1 12 Tf 72 720 Td (%s) Tj ET" % text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    return ("%%PDF-1.4\n"
+            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+            "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+            "3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> "
+            "/MediaBox [0 0 612 792] /Contents 5 0 R >> endobj\n"
+            "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+            "5 0 obj << /Length %d >> stream\n%s\nendstream endobj\n"
+            "trailer << /Root 1 0 R >>\n%%%%EOF\n" % (len(stream), stream)).encode("latin-1")
+
+
+def write_minimal_docx(path, lines):
+    text = "".join("<w:p><w:r><w:t>%s</w:t></w:r></w:p>" % line for line in lines)
+    xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+           '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+           '<w:body>%s</w:body></w:document>' % text)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("word/document.xml", xml)
 
 
 class TestProvenance(unittest.TestCase):
@@ -312,6 +336,68 @@ class TestModelBoundary(unittest.TestCase):
         case = st.get_case("t1")
         self.assertTrue(case.evidence["passport"]["failures"])
         self.assertEqual(state.next_action(case, cl).kind, "request_resupply")
+
+
+class TestDocumentExtraction(unittest.TestCase):
+    def test_text_pdf_fields_are_extracted_for_requested_schema_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "passport.pdf")
+            with open(path, "wb") as fh:
+                fh.write(simple_pdf_bytes([
+                    "Holder Name: Mei Ling Chen",
+                    "Passport Number: EK1234567",
+                    "Expiry Date: 2029-04-30",
+                    "Secret Note: do not admit",
+                ]))
+
+            fields = email_model.EmailDemoModel().extract_fields(
+                path, ["holder_name", "passport_number", "expiry_date"])
+
+        self.assertEqual(fields, {
+            "holder_name": "Mei Ling Chen",
+            "passport_number": "EK1234567",
+            "expiry_date": "2029-04-30",
+        })
+
+    def test_docx_fields_are_extracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bank_statements.docx")
+            write_minimal_docx(path, [
+                "Account Holder Name: Mei Ling Chen",
+                "Period Start: 2026-02-10",
+                "Period End: 2026-08-18",
+                "Closing Balance: 5100.00",
+                "Currency: GBP",
+            ])
+
+            fields = email_model.EmailDemoModel().extract_fields(
+                path, ["account_holder_name", "period_start", "period_end",
+                       "closing_balance", "currency"])
+
+        self.assertEqual(fields["account_holder_name"], "Mei Ling Chen")
+        self.assertEqual(fields["closing_balance"], "5100.00")
+
+    def test_image_without_ocr_sidecar_refuses_cleanly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "passport.jpg")
+            with open(path, "wb") as fh:
+                fh.write(b"not really an image")
+
+            with self.assertRaises(llm.ModelRefusal):
+                email_model.EmailDemoModel().extract_fields(path, ["holder_name"])
+
+    def test_image_ocr_sidecar_fields_are_extracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "home_ties_evidence.jpg")
+            with open(path, "wb") as fh:
+                fh.write(b"image bytes")
+            with open(path + ".ocr.txt", "w") as fh:
+                fh.write("Tie Types: apartment mortgage; elderly mother as dependant")
+
+            fields = email_model.EmailDemoModel().extract_fields(path, ["tie_types"])
+
+        self.assertEqual(
+            fields, {"tie_types": "apartment mortgage; elderly mother as dependant"})
 
 
 class TestUnimplementedCheckIsFatal(unittest.TestCase):
@@ -598,6 +684,34 @@ class TestEmailBridge(unittest.TestCase):
             self.assertEqual(results[-1]["action"].kind, "deliver_pack")
             self.assertTrue(os.path.exists(
                 os.path.join(tmp, "t1", "0-home_ties_evidence.pdf")))
+
+    def test_poll_email_pdf_attachment_extracts_fields_through_email_model(self):
+        cl = load()
+        evidence = dict(COMPLETE_EVIDENCE)
+        del evidence["home_ties_evidence"]
+        st, case = make_case(evidence=evidence)
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            poller = email_bridge.EmailPoller(eng, st, attachment_dir=tmp)
+            results = poller.poll_raw([self._raw_email(
+                attachments=[(
+                    "home_ties_evidence.pdf", "application/pdf",
+                    simple_pdf_bytes([
+                        "Tie Types: apartment mortgage; elderly mother as dependant",
+                    ]))])])
+
+        self.assertEqual(results[-1]["action"].kind, "deliver_pack")
+        self.assertEqual(st.get_case("t1").evidence["home_ties_evidence"]["fields"], {
+            "tie_types": "apartment mortgage; elderly mother as dependant"})
+        self.assertEqual(len(sink[-1]["attachments"]), 4)
 
     def test_reply_header_mapping_resolves_case_without_subject_token(self):
         cl = load()

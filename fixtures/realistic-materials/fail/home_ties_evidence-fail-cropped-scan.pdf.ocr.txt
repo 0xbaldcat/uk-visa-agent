@@ -1,0 +1,3 @@
+Property account summary
+Image is cropped below the customer details
+Mortgage status: active

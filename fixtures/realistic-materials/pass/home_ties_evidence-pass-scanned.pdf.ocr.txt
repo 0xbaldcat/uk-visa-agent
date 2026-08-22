@@ -1,0 +1,4 @@
+Property account summary
+Tie Types: apartment mortgage; elderly mother as dependant
+Property city: Shanghai
+Mortgage status: active

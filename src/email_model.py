@@ -1,13 +1,15 @@
 """Deterministic model adapter for the live email PoC.
 
-This is intentionally modest. It parses the current expected slot from a plain
-email reply and reads JSON attachments whose filename maps to a checklist item.
-It does not claim to understand PDFs or images.
+It parses the current expected slot from a plain email reply and extracts fields
+from saved real attachments through the document extraction seam. JSON field
+files are still accepted as a developer shortcut, but the mailbox walkthrough can
+now use PDF/DOCX/image files once OCR text is available.
 """
 import json
 import os
 import re
 
+import document_extract
 import llm
 
 QUOTE_CUTOFFS = [
@@ -18,6 +20,10 @@ QUOTE_CUTOFFS = [
 
 
 class EmailDemoModel(llm.StubModel):
+    def __init__(self, text_extractor=None):
+        super(EmailDemoModel, self).__init__()
+        self.text_extractor = text_extractor or document_extract.LocalDocumentTextExtractor()
+
     def parse_reply(self, text, expected_slot, slot_spec):
         value = _clean(text)
         if slot_spec.get("type") == "enum":
@@ -29,6 +35,9 @@ class EmailDemoModel(llm.StubModel):
             with open(document) as fh:
                 raw = json.load(fh)
             return dict((k, v) for k, v in raw.items() if k in wanted_fields)
+        if os.path.exists(document):
+            return document_extract.extract_fields_from_file(
+                document, wanted_fields, text_extractor=self.text_extractor)
         return super().extract_fields(document, wanted_fields)
 
 

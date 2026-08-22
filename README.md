@@ -23,6 +23,8 @@ The model seam is stubbed, so the demo is offline and deterministic.
 - [Research and design](docs/visa-agent-poc-research.md)
 - [Materials checklist](docs/materials-checklist.md)
 - [Material validation rules](docs/material-validation-rules.md)
+- [Attachment extraction interface](docs/attachment-extraction.md)
+- [Synthetic PDF/DOCX/image test materials](fixtures/realistic-materials/README.md)
 
 ## Live Email Smoke
 
@@ -59,14 +61,15 @@ python3 email_poll_once.py
 `email_poll_once.py` fetches unseen raw messages, de-duplicates by RFC
 `Message-ID`, resolves the case from `[visa-agent:<case-id>]` or reply headers,
 saves attachment bytes, routes the body and attachments through `Engine`, and
-sends the next agent response by SMTP. For the local no-LLM demo, attach JSON files
-whose names start with the checklist evidence id, such as `passport.json` or
-`home_ties_evidence.json`.
+sends the next agent response by SMTP. For the local no-LLM demo, attach real
+files whose names start with the checklist evidence id, such as `passport.pdf`,
+`bank_statements.docx`, or `home_ties_evidence.jpg`.
 
 Live email limitations for the two-day PoC: the deterministic email model parses
-plain-text replies for the current expected slot and JSON field attachments only.
-It does not extract fields from real PDFs or images; that requires a document
-extraction model adapter behind `extract_fields()`.
+plain-text replies for the current expected slot and extracts fields from text
+PDFs, DOCX/text files, JSON developer shortcuts, and OCR sidecars. Scanned PDFs
+and images need a real OCR adapter; the adapter seam is
+`document_extract.DocumentTextExtractor`.
 
 ## The demo case
 

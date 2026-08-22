@@ -1,0 +1,218 @@
+fixture_version: 1.0.0
+synthetic_data_only: true
+applicant:
+  applicant_name: Mei Ling Chen
+  trip_start: '2026-10-05'
+  trip_end: '2027-01-03'
+fixtures:
+- case: pass
+  evidence_id: passport
+  filename: pass/passport-pass-scanned.pdf
+  content_type: application/pdf
+  expected_fields:
+    holder_name: Mei Ling Chen
+    passport_number: EK1234567
+    nationality: Chinese
+    expiry_date: '2029-04-30'
+    prior_compliant_travel: true
+  expected_blocking_failures: []
+  scenario: Readable scanned passport with validity beyond the trip.
+  ocr_sidecar: pass/passport-pass-scanned.pdf.ocr.txt
+- case: fail
+  evidence_id: passport
+  filename: fail/passport-fail-expired-scanned.pdf
+  content_type: application/pdf
+  expected_fields:
+    holder_name: Mei Ling Chen
+    passport_number: EK7654321
+    nationality: Chinese
+    expiry_date: '2026-12-01'
+    prior_compliant_travel: true
+  expected_blocking_failures:
+  - date_after
+  scenario: Passport expires before the planned return date.
+  ocr_sidecar: fail/passport-fail-expired-scanned.pdf.ocr.txt
+- case: pass
+  evidence_id: bank_statements
+  filename: pass/bank_statements-pass.pdf
+  content_type: application/pdf
+  expected_fields:
+    account_holder_name: Mei Ling Chen
+    period_start: '2026-02-10'
+    period_end: '2026-08-18'
+    closing_balance: '5100.00'
+    currency: GBP
+  expected_blocking_failures: []
+  scenario: Recent statement covering over 180 days.
+- case: fail
+  evidence_id: bank_statements
+  filename: fail/bank_statements-fail-wrong-name.pdf
+  content_type: application/pdf
+  expected_fields:
+    account_holder_name: Wei Zhang
+    period_start: '2026-02-10'
+    period_end: '2026-08-18'
+    closing_balance: '5100.00'
+    currency: GBP
+  expected_blocking_failures:
+  - name_matches
+  scenario: Statement belongs to a different person.
+- case: pass
+  evidence_id: travel_itinerary
+  filename: pass/travel_itinerary-pass.pdf
+  content_type: application/pdf
+  expected_fields:
+    passenger_name: Mei Ling Chen
+    outbound_date: '2026-10-05'
+    return_date: '2027-01-03'
+  expected_blocking_failures: []
+  scenario: Return itinerary matches stated dates.
+- case: fail
+  evidence_id: travel_itinerary
+  filename: fail/travel_itinerary-fail-wrong-name.pdf
+  content_type: application/pdf
+  expected_fields:
+    passenger_name: Wei Zhang
+    outbound_date: '2026-10-05'
+    return_date: '2027-01-03'
+  expected_blocking_failures:
+  - name_matches
+  scenario: Itinerary names a different passenger.
+- case: pass
+  evidence_id: accommodation_proof
+  filename: pass/accommodation_proof-pass.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    address: 14 Bramhall Road, Manchester M20 3QT
+    host_name: Hui Chen
+    stay_start: '2026-10-05'
+    stay_end: '2027-01-03'
+  expected_blocking_failures: []
+  scenario: Host confirms address and stay dates.
+- case: fail
+  evidence_id: accommodation_proof
+  filename: fail/accommodation_proof-fail-missing-address.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    host_name: Hui Chen
+    stay_start: '2026-10-05'
+    stay_end: '2027-01-03'
+  expected_blocking_failures:
+  - field_present
+  scenario: The document never states the accommodation address.
+- case: pass
+  evidence_id: sponsor_invitation_letter
+  filename: pass/sponsor_invitation_letter-pass.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    sponsor_name: Hui Chen
+    sponsor_address: 14 Bramhall Road, Manchester M20 3QT
+    relationship: sister
+    stay_start: '2026-10-05'
+    stay_end: '2027-01-03'
+    funding_offered: accommodation only
+  expected_blocking_failures: []
+  scenario: Invitation identifies host, relationship and arrangements.
+- case: fail
+  evidence_id: sponsor_invitation_letter
+  filename: fail/sponsor_invitation_letter-fail-missing-relationship.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    sponsor_name: Hui Chen
+    sponsor_address: 14 Bramhall Road, Manchester M20 3QT
+    stay_start: '2026-10-05'
+    stay_end: '2027-01-03'
+    funding_offered: accommodation only
+  expected_blocking_failures:
+  - field_present
+  scenario: Invitation does not state the relationship.
+- case: pass
+  evidence_id: sponsor_status_proof
+  filename: pass/sponsor_status_proof-pass.png
+  content_type: image/png
+  expected_fields:
+    sponsor_name: Hui Chen
+    status_type: Indefinite Leave to Remain
+  expected_blocking_failures: []
+  scenario: Photographed status evidence with readable OCR.
+  ocr_sidecar: pass/sponsor_status_proof-pass.png.ocr.txt
+- case: fail
+  evidence_id: sponsor_status_proof
+  filename: fail/sponsor_status_proof-fail-missing-status.png
+  content_type: image/png
+  expected_fields:
+    sponsor_name: Hui Chen
+  expected_blocking_failures:
+  - field_present
+  scenario: Image does not expose the sponsor's status type.
+  ocr_sidecar: fail/sponsor_status_proof-fail-missing-status.png.ocr.txt
+- case: pass
+  evidence_id: self_employment_evidence
+  filename: pass/self_employment_evidence-pass.pdf
+  content_type: application/pdf
+  expected_fields:
+    business_name: Chen Design Studio
+    registration_id: 91310115MA1K3
+    tax_year: '2025'
+    declared_income: '38000'
+    business_statement_period_start: '2026-02-10'
+    business_statement_period_end: '2026-08-18'
+  expected_blocking_failures: []
+  scenario: Registration, tax and business statement facts are all present.
+- case: fail
+  evidence_id: self_employment_evidence
+  filename: fail/self_employment_evidence-fail-incomplete.pdf
+  content_type: application/pdf
+  expected_fields:
+    business_name: Chen Design Studio
+    registration_id: 91310115MA1K3
+    declared_income: '38000'
+    business_statement_period_start: '2026-02-10'
+  expected_blocking_failures:
+  - field_present
+  - field_present
+  scenario: Tax year and business statement end date are missing.
+- case: pass
+  evidence_id: home_ties_evidence
+  filename: pass/home_ties_evidence-pass-scanned.pdf
+  content_type: application/pdf
+  expected_fields:
+    tie_types: apartment mortgage; elderly mother as dependant
+  expected_blocking_failures: []
+  scenario: Scanned property and dependant summary exposes tie types.
+  ocr_sidecar: pass/home_ties_evidence-pass-scanned.pdf.ocr.txt
+- case: fail
+  evidence_id: home_ties_evidence
+  filename: fail/home_ties_evidence-fail-cropped-scan.pdf
+  content_type: application/pdf
+  expected_fields: {}
+  expected_blocking_failures:
+  - unreadable
+  scenario: Cropped scan contains none of the requested home-tie fields.
+  ocr_sidecar: fail/home_ties_evidence-fail-cropped-scan.pdf.ocr.txt
+- case: fail
+  evidence_id: sponsor_invitation_letter
+  filename: cross-document/sponsor_invitation_letter-fail-name-mismatch.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    sponsor_name: Wei Zhang
+    sponsor_address: 14 Bramhall Road, Manchester M20 3QT
+    relationship: family friend
+    stay_start: '2026-10-05'
+    stay_end: '2027-01-03'
+    funding_offered: accommodation only
+  expected_blocking_failures:
+  - cross_document_consistency
+  scenario: Invitation sponsor conflicts with the paired status document.
+  pair: sponsor-name-mismatch
+- case: pass
+  evidence_id: sponsor_status_proof
+  filename: cross-document/sponsor_status_proof-pair-name-mismatch.png
+  content_type: image/png
+  expected_fields:
+    sponsor_name: Hui Chen
+    status_type: Indefinite Leave to Remain
+  expected_blocking_failures: []
+  scenario: Paired status document for mismatch test.
+  ocr_sidecar: cross-document/sponsor_status_proof-pair-name-mismatch.png.ocr.txt
+  pair: sponsor-name-mismatch

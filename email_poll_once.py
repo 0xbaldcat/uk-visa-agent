@@ -4,9 +4,11 @@
 This is the live mailbox loop for the PoC. It uses the same `Engine` as the
 offline demo; SMTP/IMAP credentials come from `VISA_AGENT_*` environment vars.
 
-For document extraction in a no-LLM local demo, attach JSON files whose filenames
-start with the evidence id, e.g. `passport.json` or `home_ties_evidence.json`.
-The JSON object should contain the fields that the checklist expects.
+For document extraction in a no-LLM local demo, attach PDF/DOCX/text files whose
+filenames start with the evidence id, e.g. `passport.pdf` or
+`home_ties_evidence.docx`. Text PDFs and DOCX files can be parsed locally; scanned
+PDFs/images need an OCR adapter or a same-path `.ocr.txt` sidecar during local
+testing. JSON field files remain supported as a developer shortcut.
 """
 import os
 import sys
