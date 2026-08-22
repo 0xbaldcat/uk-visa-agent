@@ -266,12 +266,17 @@ def notify_client(st, cl, case_id, review_id, decision, note):
         return "skipped"
     try:
         settings = load_email_settings(to_addr)
-        msg = real_email.build_message(settings, subject, body, attachments=attachments)
+        prior_message_id = st.latest_email_message_for_case(case_id)
+        msg = real_email.build_message(
+            settings, subject, body, attachments=attachments,
+            in_reply_to=prior_message_id,
+            references=([prior_message_id] if prior_message_id else None))
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
             if settings.use_tls:
                 smtp.starttls()
             smtp.login(settings.username, settings.password)
             smtp.send_message(msg)
+        st.remember_email_message(msg.get("Message-ID"), case_id)
         st.record_adviser_notification(
             case_id, decision, "sent", review_id=review_id, to_addr=to_addr,
             subject=subject, body=body, message_id=msg.get("Message-ID"))
@@ -288,10 +293,11 @@ def customer_notification(cl, case, decision, note):
         subject = "[visa-agent:%s] Adviser review complete" % case.id
         body = (
             "Your materials have been reviewed by an adviser.\n\n"
+            "Case ID: %s\n\n"
             "I've attached the final review report for this stage. Please read it "
             "and tell us if any factual detail is wrong before you use it.\n\n"
             "This service does not submit the visa application for you."
-        )
+        ) % case.id
         report = render_client_final_report(cl, case, note)
         return subject, body, [{
             "filename": "visa-final-review-report.md",
@@ -303,9 +309,10 @@ def customer_notification(cl, case, decision, note):
     body = (
         "Your materials have been reviewed by an adviser, and we need one more "
         "follow-up before we can finish the report.\n\n"
+        "Case ID: %s\n\n"
         "%s\n\n"
         "Please reply to this email with the requested information or documents."
-        % follow_up)
+        % (case.id, follow_up))
     return subject, body, []
 
 

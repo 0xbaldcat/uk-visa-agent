@@ -231,6 +231,7 @@ class Engine(object):
 
     def _respond(self, case, action, now=None):
         body = compose.compose(action, self.checklist, case, model=self.model)
+        body = compose.with_case_reference(body, case)
         attachments = None
         review_pack = None
         if action.kind == "deliver_pack":

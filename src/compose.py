@@ -102,6 +102,13 @@ def compose(action, checklist, case, model=None):
     raise ValueError("no phrasing for action kind %r" % kind)
 
 
+def with_case_reference(body, case):
+    case_id = getattr(case, "id", None)
+    if not case_id or "Case ID:" in body:
+        return body
+    return "Case ID: %s\n\n%s" % (case_id, body)
+
+
 def risk_prompt(risk):
     """The one client-facing sentence a risk factor is allowed to produce."""
     return risk["ask"]

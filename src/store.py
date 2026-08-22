@@ -432,6 +432,13 @@ class Store(object):
             (message_id,)).fetchone()
         return None if row is None else row["case_id"]
 
+    def latest_email_message_for_case(self, case_id):
+        row = self.conn.execute(
+            "SELECT message_id FROM email_message_cases WHERE case_id = ? "
+            "ORDER BY rowid DESC LIMIT 1",
+            (case_id,)).fetchone()
+        return None if row is None else row["message_id"]
+
     def remember_email_sender(self, sender, case_id):
         if not sender:
             return

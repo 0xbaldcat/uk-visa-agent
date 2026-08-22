@@ -1041,6 +1041,61 @@ class TestAdminPanel(unittest.TestCase):
         self.assertEqual(latest["status"], "skipped")
         self.assertIn("no client email", latest["error"])
 
+    def test_notify_client_threads_and_includes_case_id(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+        st.remember_email_sender("client@example.test", "t1")
+        st.remember_email_message("<agent-prev@example.test>", "t1")
+        sent = []
+
+        class FakeSmtp(object):
+            def __init__(self, host, port, timeout=None):
+                self.host = host
+                self.port = port
+                self.timeout = timeout
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return False
+            def starttls(self):
+                pass
+            def login(self, username, password):
+                pass
+            def send_message(self, msg):
+                sent.append(msg)
+
+        old_env = dict(os.environ)
+        old_smtp = admin_panel.smtplib.SMTP
+        try:
+            os.environ.update({
+                "VISA_AGENT_SMTP_HOST": "smtp.example.test",
+                "VISA_AGENT_SMTP_PORT": "587",
+                "VISA_AGENT_IMAP_HOST": "imap.example.test",
+                "VISA_AGENT_IMAP_PORT": "993",
+                "VISA_AGENT_EMAIL_USER": "agent@example.test",
+                "VISA_AGENT_EMAIL_PASSWORD": "secret",
+                "VISA_AGENT_FROM_EMAIL": "agent@example.test",
+                "VISA_AGENT_TO_EMAIL": "client@example.test",
+            })
+            admin_panel.smtplib.SMTP = FakeSmtp
+            status = admin_panel.notify_client(
+                st, cl, "t1", 12, "approved_for_final_report", "Looks good.")
+        finally:
+            admin_panel.smtplib.SMTP = old_smtp
+            os.environ.clear()
+            os.environ.update(old_env)
+
+        latest = st.latest_adviser_notification("t1")
+        body = sent[0].get_body(preferencelist=("plain",)).get_content()
+        self.assertEqual(status, "sent")
+        self.assertEqual(sent[0]["In-Reply-To"], "<agent-prev@example.test>")
+        self.assertIn("<agent-prev@example.test>", sent[0]["References"])
+        self.assertIn("Case ID: t1", body)
+        self.assertEqual(st.case_for_email_message(sent[0]["Message-ID"]), "t1")
+        self.assertEqual(latest["status"], "sent")
+
 
 class TestRealEmailAdapter(unittest.TestCase):
     def test_build_message_attaches_json_deliverables(self):
@@ -1256,6 +1311,7 @@ class TestEmailBridge(unittest.TestCase):
         self.assertTrue(case_id.startswith("case_"))
         self.assertEqual(st.get_case(case_id).slots["applicant_name"], "Mei Ling Chen")
         self.assertEqual(results[-1]["sent"]["case_id"], case_id)
+        self.assertIn("Case ID: %s" % case_id, results[-1]["sent"]["body"])
         self.assertEqual(results[-1]["sent"]["subject"], "Re: UK visa help")
         self.assertEqual(st.case_for_email_message(sink[-1]["message_id"]), case_id)
 
