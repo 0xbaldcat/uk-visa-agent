@@ -18,6 +18,12 @@ python3 -m unittest discover -s tests        # 54 tests
 
 The model seam is stubbed, so the demo is offline and deterministic.
 
+## Documentation
+
+- [Research and design](docs/visa-agent-poc-research.md)
+- [Materials checklist](docs/materials-checklist.md)
+- [Material validation rules](docs/material-validation-rules.md)
+
 ## Live Email Smoke
 
 For a real mailbox walkthrough, use a dedicated test mailbox with SMTP, IMAP and
