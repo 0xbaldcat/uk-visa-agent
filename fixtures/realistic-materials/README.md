@@ -11,6 +11,19 @@ types, each with a passing example and a deliberately failing example. Formats
 include native-text PDF, scanned-image PDF, DOCX and PNG. `cross-document/` adds
 a paired sponsor-name mismatch test.
 
+The fixtures use document-specific layouts rather than bare field lists:
+
+- passport/status images include portrait zones, document framing and a
+  synthetic machine-readable section;
+- bank statements include an account summary and transaction rows;
+- itineraries include booking, ticket, route and baggage details;
+- accommodation, invitation and employment DOCX files use formal letterheads,
+  dates, structured fact panels and signature areas;
+- self-employment and home-ties files resemble indexed evidence summaries.
+
+Every page is visibly marked as synthetic so it cannot be mistaken for genuine
+identity, immigration, banking or employment evidence.
+
 Scanned PDFs and images have same-path `.ocr.txt` files. These are deterministic
 stand-ins for Baidu OCR in the offline demo; once the Baidu adapter is configured,
 the original binary files can be sent to it and the sidecars ignored.

@@ -13,25 +13,47 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 5 0 obj
-<< /Length 292 >>
+<< /Length 2027 >>
 stream
-BT
-/F1 16 Tf
-72 742 Td
-(RETURN FLIGHT ITINERARY) Tj
-/F1 11 Tf
-0 -34 Td
-(Booking Reference: SYNTH-UK-2601) Tj
-0 -20 Td
-(Passenger Name: Mei Ling Chen) Tj
-0 -20 Td
-(Outbound Date: 2026-10-05) Tj
-0 -20 Td
-(Return Date: 2027-01-03) Tj
-0 -20 Td
-(Route: Shanghai - London - Shanghai) Tj
-0 -20 Td
-ET
+0.08 0.20 0.36 rg 0 710 612 82 re f
+1 1 1 rg BT /F1 17 Tf 54 754 Td (RETURN FLIGHT ITINERARY) Tj ET
+1 1 1 rg BT /F1 8 Tf 54 730 Td (SYNTHETIC CUSTOMER DOCUMENT) Tj ET
+0.94 0.96 0.98 rg 48 610 516 75 re f
+0.72 0.76 0.82 RG 48 610 516 75 re S
+1 1 1 rg 48 654 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 660 Td (Booking Reference: SYNTH-UK-2601) Tj ET
+0.88 0.90 0.93 RG 48 652 516 0 l S
+0.97 0.98 0.99 rg 48 632 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 638 Td (Passenger Name: Mei Ling Chen) Tj ET
+0.88 0.90 0.93 RG 48 630 516 0 l S
+1 1 1 rg 48 610 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 616 Td (Outbound Date: 2026-10-05) Tj ET
+0.88 0.90 0.93 RG 48 608 516 0 l S
+0.97 0.98 0.99 rg 48 588 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 594 Td (Return Date: 2027-01-03) Tj ET
+0.88 0.90 0.93 RG 48 586 516 0 l S
+1 1 1 rg 48 566 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 572 Td (Ticket number: 999-2601000001) Tj ET
+0.88 0.90 0.93 RG 48 564 516 0 l S
+0.12 0.28 0.46 rg 48 544 516 24 re f
+1 1 1 rg BT /F1 9 Tf 58 550 Td (DOCUMENT DETAILS) Tj ET
+0.97 0.98 0.99 rg 48 513 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 519 Td (Cabin: Economy Flexible) Tj ET
+0.88 0.90 0.93 RG 48 511 516 0 l S
+1 1 1 rg 48 491 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 497 Td (OUTBOUND | ZX201 | Shanghai PVG 09:20 | London LHR 15:35) Tj ET
+0.88 0.90 0.93 RG 48 489 516 0 l S
+0.97 0.98 0.99 rg 48 469 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 475 Td (RETURN | ZX202 | London LHR 18:10 | Shanghai PVG 12:25 +1) Tj ET
+0.88 0.90 0.93 RG 48 467 516 0 l S
+1 1 1 rg 48 447 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 453 Td (Baggage: 1 x 23kg checked; 1 x cabin bag) Tj ET
+0.88 0.90 0.93 RG 48 445 516 0 l S
+0.97 0.98 0.99 rg 48 425 516 20 re f
+0.20 0.24 0.30 rg BT /F1 9 Tf 58 431 Td (Status: Reservation held for visa documentation only) Tj ET
+0.88 0.90 0.93 RG 48 423 516 0 l S
+0.70 0.12 0.12 rg BT /F1 8 Tf 54 45 Td (SYNTHETIC TEST DOCUMENT - NOT VALID FOR ANY APPLICATION) Tj ET
+0.45 0.48 0.52 rg BT /F1 8 Tf 500 45 Td (Page 1 of 1) Tj ET
 endstream
 endobj
 xref
@@ -44,5 +66,5 @@ xref
 0000000317 00000 n 
 trailer << /Size 6 /Root 1 0 R >>
 startxref
-660
+2396
 %%EOF

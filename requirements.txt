@@ -1,2 +1,3 @@
 PyYAML>=6.0
 Pillow>=10.0  # fixture image/scanned-PDF generator only
+python-docx>=1.1  # realistic DOCX fixture generator only
