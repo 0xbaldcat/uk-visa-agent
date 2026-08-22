@@ -99,7 +99,7 @@ evidence:
     label: Personal bank statements (recent months)
     category: funds
     required: always
-    why: "Send recent personal bank statements showing your name, statement dates, regular income or savings, and the closing balance."
+    why: "Send recent personal bank statements showing the account holder name, statement start and end dates, transactions, and closing balance."
     source: appendix_v
     extract: [account_holder_name, period_start, period_end, closing_balance, currency]
     checks:
@@ -128,7 +128,7 @@ evidence:
     label: Travel booking or itinerary showing return travel
     category: itinerary
     required: always
-    why: "Send a flight booking, reservation, or planned itinerary that shows your outbound and return travel dates and passenger name."
+    why: "Send a flight booking, reservation, or planned itinerary showing your outbound and return travel dates. Include the passenger name if it is shown on the document."
     source: supporting_docs
     extract: [outbound_date, return_date, passenger_name]
     checks:
@@ -152,7 +152,7 @@ evidence:
     label: Proof of where you will stay
     category: itinerary
     required: always
-    why: "Send a hotel booking, accommodation confirmation, or host address showing where you plan to stay in the UK."
+    why: "Send a hotel booking, accommodation confirmation, or host address showing the UK address where you plan to stay."
     source: supporting_docs
     extract: [address, host_name, stay_start, stay_end]
     checks:
@@ -165,7 +165,7 @@ evidence:
     required_when:
       slot: has_uk_settled_relative
       equals: true
-    why: "Send a letter from your UK relative with their name, address, relationship to you, visit dates, accommodation arrangements, and whether they will provide financial support."
+    why: "Send a letter from your UK relative showing their name, address, and relationship to you. Include visit dates, accommodation arrangements, and financial support details if relevant."
     source: caseworker_guidance
     extract: [sponsor_name, sponsor_address, relationship, stay_start, stay_end, funding_offered]
     checks:
@@ -184,7 +184,7 @@ evidence:
     required_when:
       slot: has_uk_settled_relative
       equals: true
-    why: "Send a copy of your UK relative's British passport, biometric residence permit, eVisa/share-code evidence, or other proof of their UK status."
+    why: "Send a copy of your UK relative's British passport, biometric residence permit, eVisa/share-code evidence, or other proof showing their name and UK status."
     source: supporting_docs
     extract: [sponsor_name, status_type]
     checks:
@@ -197,7 +197,7 @@ evidence:
     required_when:
       slot: third_party_funding
       equals: true
-    why: "Send your sponsor's recent bank statements showing their name, statement dates, regular income or savings, and closing balance."
+    why: "Send your sponsor's recent bank statements showing the account holder name, statement start and end dates, transactions, and closing balance."
     source: caseworker_guidance
     extract: [account_holder_name, period_start, period_end, closing_balance, currency]
     checks:
@@ -210,7 +210,7 @@ evidence:
     required_when:
       slot: employment_status
       equals: employed
-    why: "Send an employer letter showing your employer name, job title, salary if available, approved leave dates, and expected return-to-work date."
+    why: "Send an employer letter showing your employer name and job title. Include salary, approved leave dates, and expected return-to-work date if available."
     source: caseworker_guidance
     extract: [employer_name, job_title, leave_start, leave_end, annual_salary]
     checks:
@@ -230,7 +230,7 @@ evidence:
     required_when:
       slot: employment_status
       equals: self_employed
-    why: "Send documents showing your business is active, such as business registration, recent tax records, and business bank statements."
+    why: "Send documents showing your business name, registration number, recent tax year and declared income, plus business bank statement start and end dates."
     source: caseworker_guidance
     extract: [business_name, registration_id, tax_year, declared_income, business_statement_period_start, business_statement_period_end]
     checks:
@@ -241,7 +241,7 @@ evidence:
     label: Evidence of your ties to your home country (property, family, dependants, studies)
     category: home_ties
     required: always
-    why: "Send any relevant documents showing commitments in your home country, such as property, family or dependant responsibilities, studies, or other ongoing obligations."
+    why: "Send documents that show the type of home-country ties you want us to record, such as property, family or dependant responsibilities, studies, or other ongoing obligations."
     source: caseworker_guidance
     extract: [tie_types]
     checks:
