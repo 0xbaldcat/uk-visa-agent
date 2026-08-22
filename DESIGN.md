@@ -77,6 +77,11 @@ This still does **not** let the LLM drive the case. The interpreter may say
 document is acceptable, or whether the pack is ready. Structured output re-enters
 the workflow only after schema coercion in `llm.coerce_slot()`.
 
+Case identity follows the same rule. A first-contact email with no subject token
+and no reply-header mapping creates a new case automatically. Replies are mapped
+back through RFC `Message-ID` / `In-Reply-To` / `References`; a fixed
+`VISA_AGENT_CASE_ID` is only a demo override, not the product model.
+
 ---
 
 ## 3. Delivery stability: six failure modes and the control for each

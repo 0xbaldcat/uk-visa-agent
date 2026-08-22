@@ -60,10 +60,13 @@ python3 email_poll_once.py
 
 `email_poll_once.py` fetches unseen raw messages, de-duplicates by RFC
 `Message-ID`, resolves the case from `[visa-agent:<case-id>]` or reply headers,
-saves attachment bytes, routes the body and attachments through `Engine`, and
-sends the next agent response by SMTP. For the local no-LLM demo, attach real
-files whose names start with the checklist evidence id, such as `passport.pdf`,
-`bank_statements.docx`, or `home_ties_evidence.jpg`.
+and creates a new case when a first-contact email has no known thread mapping.
+Then it saves attachment bytes, routes the body and attachments through `Engine`,
+and sends the next agent response by SMTP. `VISA_AGENT_CASE_ID` is optional; set
+it only when you deliberately want all unmatched mail to go into one demo case.
+For the local no-LLM demo, attach real files whose names start with the checklist
+evidence id, such as `passport.pdf`, `bank_statements.docx`, or
+`home_ties_evidence.jpg`.
 
 Live email limitations for the two-day PoC: the deterministic email model parses
 plain-text replies for the current expected slot and extracts fields from text

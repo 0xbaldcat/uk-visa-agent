@@ -8,6 +8,7 @@ reply through the configured email channel.
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from email import policy
 from email.utils import parseaddr
 from email.parser import BytesParser
@@ -191,6 +192,7 @@ class EmailPoller(object):
 
     def resolve_case(self, parsed):
         if parsed.case_id:
+            self._ensure_case(parsed.case_id, "subject_token")
             return parsed.case_id
         for message_id in [parsed.in_reply_to] + list(parsed.references):
             if message_id and message_id in self.message_to_case:
@@ -199,7 +201,25 @@ class EmailPoller(object):
                 case_id = self.store.case_for_email_message(message_id)
                 if case_id:
                     return case_id
-        return self.default_case_id
+        if self.default_case_id:
+            self._ensure_case(self.default_case_id, "default_case")
+            return self.default_case_id
+        return self._create_case(parsed)
+
+    def _ensure_case(self, case_id, source):
+        if self.store.get_case(case_id) is None:
+            self.store.create_case(case_id, self.engine.checklist.route_id)
+            self.store.log(case_id, "case_routed", {"source": source})
+
+    def _create_case(self, parsed):
+        case_id = new_case_id(parsed)
+        self.store.create_case(case_id, self.engine.checklist.route_id)
+        self.store.log(case_id, "case_routed", {
+            "source": "new_email",
+            "from": parsed.from_addr,
+            "message_id": parsed.message_id,
+        })
+        return case_id
 
     def _set_thread_context(self, case_id, parsed):
         channel = getattr(getattr(self.engine, "router", None), "email", None)
@@ -222,3 +242,10 @@ class EmailPoller(object):
         with open(path, "wb") as fh:
             fh.write(attachment.content)
         return path
+
+
+def new_case_id(parsed, now=None):
+    now = now or datetime.utcnow()
+    seed = "%s:%s:%s" % (parsed.from_addr or "", parsed.message_id or "", parsed.subject or "")
+    token = re.sub(r"[^a-z0-9]+", "", str(abs(hash(seed))).lower())[:8]
+    return "case_%s_%s" % (now.strftime("%Y%m%d_%H%M%S"), token)

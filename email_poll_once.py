@@ -26,13 +26,13 @@ import store as store_mod
 
 def main():
     settings = real_email.EmailSettings.from_env()
-    case_id = os.environ.get("VISA_AGENT_CASE_ID", "case-001")
+    case_id = os.environ.get("VISA_AGENT_CASE_ID")
     db_path = os.environ.get("VISA_AGENT_DB_PATH", "visa-agent.sqlite3")
     attachment_dir = os.environ.get("VISA_AGENT_ATTACHMENT_DIR", "inbound-attachments")
 
     cl = checklist_mod.load_route("visitor_family_visit")
     st = store_mod.Store(db_path)
-    if st.get_case(case_id) is None:
+    if case_id and st.get_case(case_id) is None:
         st.create_case(case_id, cl.route_id)
 
     email_channel = real_email.RealEmailChannel(settings)

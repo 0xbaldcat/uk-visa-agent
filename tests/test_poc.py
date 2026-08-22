@@ -777,6 +777,61 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(results[-1]["sent"]["in_reply_to"], "<client-reply@example.test>")
         self.assertEqual(results[-1]["sent"]["to_addr"], "client@example.test")
 
+    def test_new_email_without_case_token_auto_creates_case(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<new-client@example.test>",
+            subject="UK visa help",
+            body=("Hi, my name is Mei Ling Chen. I have a Chinese passport and "
+                  "want to visit my sister in the UK from 2026-10-05 to 2027-01-03."))])
+
+        cases = st.conn.execute("select id from cases").fetchall()
+        self.assertEqual(len(cases), 1)
+        case_id = cases[0]["id"]
+        self.assertTrue(case_id.startswith("case_"))
+        self.assertEqual(st.get_case(case_id).slots["applicant_name"], "Mei Ling Chen")
+        self.assertEqual(results[-1]["sent"]["case_id"], case_id)
+        self.assertEqual(st.case_for_email_message(sink[-1]["message_id"]), case_id)
+
+    def test_reply_to_auto_created_case_uses_persisted_message_map(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+        poller.poll_raw([self._raw_email(
+            message_id="<new-client@example.test>",
+            subject="UK visa help",
+            body=("Hi, my name is Mei Ling Chen. I have a Chinese passport and "
+                  "want to visit my sister in the UK from 2026-10-05 to 2027-01-03."))])
+        case_id = st.conn.execute("select id from cases").fetchone()["id"]
+        outgoing_id = sink[-1]["message_id"]
+
+        poller2 = email_bridge.EmailPoller(eng, st)
+        poller2.poll_raw([self._raw_email(
+            message_id="<new-client-reply@example.test>",
+            subject="Re: UK visa help",
+            body="I am employed, self funding, no refusals, 5000 pounds.",
+            in_reply_to=outgoing_id,
+            references=[outgoing_id])])
+
+        self.assertEqual(st.conn.execute("select count(*) n from cases").fetchone()["n"], 1)
+        self.assertEqual(st.get_case(case_id).slots["employment_status"], "employed")
+        self.assertEqual(st.get_case(case_id).slots["estimated_trip_cost_gbp"], 5000.0)
+
     def test_empty_case_can_complete_intake_from_ten_plain_email_replies(self):
         cl = load()
         st, case = make_case(slots={})
