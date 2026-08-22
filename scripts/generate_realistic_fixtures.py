@@ -7,6 +7,7 @@ the local extractor can read them without OCR. Scanned PDFs and PNGs include an
 """
 from pathlib import Path
 import textwrap
+import time
 import zipfile
 
 import yaml
@@ -80,9 +81,12 @@ def write_docx(path, title, paragraphs):
             'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
             'Target="word/document.xml"/></Relationships>')
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", content_types)
-        archive.writestr("_rels/.rels", rels)
-        archive.writestr("word/document.xml", document)
+        for name, content in (("[Content_Types].xml", content_types),
+                              ("_rels/.rels", rels),
+                              ("word/document.xml", document)):
+            item = zipfile.ZipInfo(name, date_time=(2026, 8, 22, 0, 0, 0))
+            item.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(item, content)
 
 
 def font(size):
@@ -113,7 +117,9 @@ def render_scan(path, title, lines, image_format):
     draw.text((105, 1600), "SYNTHETIC TEST DOCUMENT — NOT VALID FOR TRAVEL",
               font=font(22), fill="#9a3c3c")
     if image_format == "PDF":
-        image.save(path, "PDF", resolution=150.0)
+        fixed_time = time.gmtime(1787356800)  # 2026-08-22T00:00:00Z
+        image.save(path, "PDF", resolution=150.0,
+                   creationDate=fixed_time, modDate=fixed_time)
     else:
         image.save(path, image_format)
 
@@ -294,7 +300,34 @@ def generate():
                           ["field_present", "field_present"], case="fail",
                           note="Tax year and business statement end date are missing."))
 
-    # 8. Home ties: scanned PDF. The negative is deliberately unreadable.
+    # Alternative work branch. Employed clients need this instead of the
+    # self-employment bundle.
+    lines = ["Employer Name: Shanghai Horizon Design Co., Ltd.",
+             "Job Title: Senior Product Designer", "Leave Start: 2026-10-02",
+             "Leave End: 2027-01-05", "Annual Salary: CNY 420000",
+             "Mei Ling Chen has approved paid leave and is expected to resume work on 2027-01-06."]
+    path = OUT / "pass" / "employment_letter-pass.docx"
+    write_docx(path, "Employment and approved leave confirmation", lines)
+    fixtures.append(entry("employment_letter", "pass/" + path.name,
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                          {"employer_name": "Shanghai Horizon Design Co., Ltd.",
+                           "job_title": "Senior Product Designer", "leave_start": "2026-10-02",
+                           "leave_end": "2027-01-05", "annual_salary": "CNY 420000"}, [],
+                          note="Employer, role, approved leave and return-to-work date are stated."))
+    lines = ["Employer Name: Shanghai Horizon Design Co., Ltd.",
+             "Leave Start: 2026-10-02", "Leave End: 2027-01-05",
+             "Annual Salary: CNY 420000",
+             "Mei Ling Chen has been granted leave; her role is not identified."]
+    path = OUT / "fail" / "employment_letter-fail-missing-job-title.docx"
+    write_docx(path, "Employment and approved leave confirmation", lines)
+    fixtures.append(entry("employment_letter", "fail/" + path.name,
+                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                          {"employer_name": "Shanghai Horizon Design Co., Ltd.",
+                           "leave_start": "2026-10-02", "leave_end": "2027-01-05",
+                           "annual_salary": "CNY 420000"}, ["field_present"], case="fail",
+                          note="The letter does not identify the applicant's job title."))
+
+    # Home ties: scanned PDF. The negative is deliberately unreadable.
     lines = ["Property account summary", "Tie Types: apartment mortgage; elderly mother as dependant",
              "Property city: Shanghai", "Mortgage status: active"]
     path = OUT / "pass" / "home_ties_evidence-pass-scanned.pdf"

@@ -173,6 +173,30 @@ fixtures:
   - field_present
   scenario: Tax year and business statement end date are missing.
 - case: pass
+  evidence_id: employment_letter
+  filename: pass/employment_letter-pass.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    employer_name: Shanghai Horizon Design Co., Ltd.
+    job_title: Senior Product Designer
+    leave_start: '2026-10-02'
+    leave_end: '2027-01-05'
+    annual_salary: CNY 420000
+  expected_blocking_failures: []
+  scenario: Employer, role, approved leave and return-to-work date are stated.
+- case: fail
+  evidence_id: employment_letter
+  filename: fail/employment_letter-fail-missing-job-title.docx
+  content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  expected_fields:
+    employer_name: Shanghai Horizon Design Co., Ltd.
+    leave_start: '2026-10-02'
+    leave_end: '2027-01-05'
+    annual_salary: CNY 420000
+  expected_blocking_failures:
+  - field_present
+  scenario: The letter does not identify the applicant's job title.
+- case: pass
   evidence_id: home_ties_evidence
   filename: pass/home_ties_evidence-pass-scanned.pdf
   content_type: application/pdf

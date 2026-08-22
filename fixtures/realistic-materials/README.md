@@ -5,10 +5,11 @@ All identities, document numbers, balances, addresses and references are
 fictional. The documents are test artifacts and must not be used as real
 immigration evidence.
 
-The suite covers the eight evidence items required for the demo applicant. Each
-item has a passing example and a deliberately failing example. Formats include
-native-text PDF, scanned-image PDF, DOCX and PNG. `cross-document/` adds a paired
-sponsor-name mismatch test.
+The suite covers both eight-item demo profiles: self-employed and employed. Their
+shared items plus the alternative work evidence produce nine distinct evidence
+types, each with a passing example and a deliberately failing example. Formats
+include native-text PDF, scanned-image PDF, DOCX and PNG. `cross-document/` adds
+a paired sponsor-name mismatch test.
 
 Scanned PDFs and images have same-path `.ocr.txt` files. These are deterministic
 stand-ins for Baidu OCR in the offline demo; once the Baidu adapter is configured,

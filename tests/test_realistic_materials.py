@@ -39,14 +39,18 @@ class TestRealisticMaterialFixtures(unittest.TestCase):
             cls.manifest = yaml.safe_load(fh)
         cls.route = checklist.load_route("visitor_family_visit")
 
-    def test_suite_has_pass_and_fail_for_all_eight_required_items(self):
-        required = set(ev["id"] for ev in self.route.required_evidence(SLOTS))
+    def test_suite_has_pass_and_fail_for_employed_and_self_employed_profiles(self):
+        self_employed = set(ev["id"] for ev in self.route.required_evidence(SLOTS))
+        employed_slots = dict(SLOTS, employment_status="employed")
+        employed = set(ev["id"] for ev in self.route.required_evidence(employed_slots))
+        required_across_profiles = self_employed | employed
         normal = [row for row in self.manifest["fixtures"] if not row.get("pair")]
         passing = set(row["evidence_id"] for row in normal if row["case"] == "pass")
         failing = set(row["evidence_id"] for row in normal if row["case"] == "fail")
-        self.assertEqual(len(required), 8)
-        self.assertEqual(passing, required)
-        self.assertEqual(failing, required)
+        self.assertEqual(len(self_employed), 8)
+        self.assertEqual(len(employed), 8)
+        self.assertEqual(passing, required_across_profiles)
+        self.assertEqual(failing, required_across_profiles)
 
     def test_every_fixture_extracts_and_validates_as_manifested(self):
         pair_fields = {}

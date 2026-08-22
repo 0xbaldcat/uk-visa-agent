@@ -104,10 +104,10 @@ the email bridge maps attachments to checklist items from filename aliases.
 
 ## Checked-in realistic fixtures
 
-`fixtures/realistic-materials/` contains synthetic pass/fail examples for all
-eight items required by the demo applicant. The set mixes native-text PDFs,
-scanned PDFs, DOCX files and PNG images. `manifest.yaml` is executable test data:
-the unit suite checks each file's extracted fields and blocking failure kinds
-against it. Scanned/image fixtures use deterministic `.ocr.txt` sidecars in
-offline tests; live email uses the Baidu OCR adapter so a client only sends the
-original PDF/image attachment.
+`fixtures/realistic-materials/` contains synthetic pass/fail examples for both
+eight-item demo profiles: employed and self-employed. The set mixes native-text
+PDFs, scanned PDFs, DOCX files and PNG images. `manifest.yaml` is executable test
+data: the unit suite checks each file's extracted fields and blocking failure
+kinds against it. Scanned/image fixtures use deterministic `.ocr.txt` sidecars
+in offline tests; live email uses the Baidu OCR adapter so a client only sends
+the original PDF/image attachment.
