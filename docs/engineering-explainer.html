@@ -279,7 +279,8 @@
     <section id="scope">
       <h2>1. 这个 PoC 做什么，不做什么</h2>
       <p>
-        范围锁定在 <strong>UK Standard Visitor，探亲访问 + 英国定居亲属场景</strong>。
+        产品范围锁定在 <strong>UK Standard Visitor</strong>。当前 PoC 的主演示和主要测试采用
+        <strong>探亲访问 + 英国定居亲属</strong> 作为 reference scenario，不代表产品只服务探亲客户。
         选择这个场景不是因为它最简单，而是因为它能体现顾问价值：客户可能资金刚够、
         有英国定居亲属、计划停留较久，需要系统主动识别材料缺口和风险因素。
       </p>
@@ -301,10 +302,11 @@
         </div>
       </div>
       <div class="callout warn">
-        <strong>当前实现口径：</strong>现场 demo 的整案观察由确定性 fallback 生成；代码已经预留
-        <code>model.analyse_case(...)</code> 接口和引用校验，但 live model adapter 尚未接入这个方法。
-        fallback 只覆盖长停留、资金接近行程成本、英国定居亲属三类演示启发式，不是法律阈值，
-        也不等于完整整案审查。因此本页会把“当前已运行能力”和“可插拔 AI 能力”分开描述。
+        <strong>当前实现口径：</strong>现场默认 demo 的整案观察由确定性 fallback 生成，便于离线复现；
+        真实 LLM 可通过 <code>VISA_AGENT_CASE_ANALYSIS_LLM=1</code> 接入
+        <code>model.analyse_case(...)</code>，但输出只是 candidate observation，仍必须通过引用校验和边界校验。
+        当前只有 <code>visitor_family_visit</code> 这一套 route 配置和完整测试覆盖，旅游、短期商务等
+        Standard Visitor 目的还没有各自独立的材料规则和测试夹具。
       </div>
       <div class="callout">
         签证材料业务的错误代价高度不对称：多问一句只是麻烦，漏材料或编造事实可能导致拒签、
@@ -594,16 +596,16 @@
             <td>模型网关、超时预算、重试策略、敏感信息 redaction、成本监控、provider fallback。</td>
           </tr>
           <tr>
-            <td>整案分析层当前使用 deterministic fallback；模型接口尚未接入 live adapter。</td>
-            <td>接入受控模型 adapter，建立整案分析评测集、模型版本回归、提示注入防护、adviser 采纳/驳回闭环和责任归属。</td>
+            <td>整案分析层默认使用 deterministic fallback；真实 LLM adapter 是 opt-in smoke path。</td>
+            <td>建立整案分析评测集、模型版本回归、提示注入防护、adviser 采纳/驳回闭环和责任归属。</td>
           </tr>
           <tr>
             <td>PDF report 用无依赖简版渲染。</td>
             <td>正式 PDF 模板、品牌样式、分页、附件索引、签名/版本号。</td>
           </tr>
           <tr>
-            <td>PoC 只覆盖一个访客签探亲 route。</td>
-            <td>多 route 需要独立配置、测试夹具、材料规则和人工审核 SOP。</td>
+            <td>PoC 产品类型是 UK Standard Visitor，但只完整覆盖探亲 reference scenario。</td>
+            <td>旅游、短期商务等目的需要独立配置、测试夹具、材料规则和人工审核 SOP。</td>
           </tr>
         </tbody>
       </table>

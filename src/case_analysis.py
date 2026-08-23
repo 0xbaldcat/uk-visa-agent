@@ -57,10 +57,19 @@ def analyse(checklist, case, model=None, limit=5):
     # type: (Any, Any, Optional[Any], int) -> Dict[str, Any]
     facts = build_fact_context(checklist, case)
     candidates = []
+    candidate_source = "deterministic_fallback"
+    model_error = None
     if model is not None and hasattr(model, "analyse_case"):
         try:
-            candidates = model.analyse_case({"facts": facts, "allowed_limbs": sorted(ALLOWED_LIMBS)}) or []
-        except Exception:
+            model_candidates = model.analyse_case({
+                "facts": facts,
+                "allowed_limbs": sorted(ALLOWED_LIMBS),
+            }) or []
+            if model_candidates:
+                candidates = model_candidates
+                candidate_source = "model"
+        except Exception as exc:
+            model_error = str(exc)
             candidates = []
     if not candidates:
         candidates = deterministic_candidates(checklist, case, facts)
@@ -83,6 +92,8 @@ def analyse(checklist, case, model=None, limit=5):
             "It does not predict an outcome, score the case, or decide sufficiency.",
             "Each observation must cite facts already present in the case record.",
         ],
+        "candidate_source": candidate_source,
+        "model_error": model_error,
     }
 
 

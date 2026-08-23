@@ -24,11 +24,13 @@ QUOTE_CUTOFFS = [
 
 
 class EmailDemoModel(llm.StubModel):
-    def __init__(self, text_extractor=None, intake_client=None, document_client=None):
+    def __init__(self, text_extractor=None, intake_client=None, document_client=None,
+                 case_analysis_client=None):
         super(EmailDemoModel, self).__init__()
         self.text_extractor = text_extractor or document_extract.text_extractor_from_env()
         self.intake_client = intake_client
         self.document_client = document_client or document_client_from_env()
+        self.case_analysis_client = case_analysis_client or case_analysis_client_from_env()
         self.last_document_trace = None
 
     def parse_reply(self, text, expected_slot, slot_spec):
@@ -113,6 +115,11 @@ class EmailDemoModel(llm.StubModel):
             return result.accepted_json
         return super().extract_fields(document, wanted_fields)
 
+    def analyse_case(self, context):
+        if self.case_analysis_client is None:
+            raise llm.ModelRefusal("case analysis LLM is not enabled")
+        return self.case_analysis_client.analyse_case(context)
+
 
 class ChatCompletionsIntakeClient(object):
     """OpenAI-compatible JSON extractor for natural-language intake emails."""
@@ -151,7 +158,7 @@ class ChatCompletionsIntakeClient(object):
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 raw = json.loads(resp.read().decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, socket.timeout, ValueError, KeyError) as exc:
-            raise llm.ModelRefusal("LLM intake parse failed: %s" % exc)
+            raise llm.ModelRefusal("LLM chat completion failed: %s" % exc)
         try:
             content = raw["choices"][0]["message"]["content"]
             parsed = json.loads(content)
@@ -167,6 +174,17 @@ class ChatCompletionsDocumentClient(ChatCompletionsIntakeClient):
 
     def parse_document_candidate(self, text, wanted_fields):
         return self._complete_json(_document_messages(text, wanted_fields))
+
+
+class ChatCompletionsCaseAnalysisClient(ChatCompletionsIntakeClient):
+    """OpenAI-compatible candidate generator for whole-case adviser questions."""
+
+    def analyse_case(self, context):
+        parsed = self._complete_json(_case_analysis_messages(context))
+        observations = parsed.get("observations", [])
+        if not isinstance(observations, list):
+            raise llm.ModelRefusal("LLM case analysis observations was not a list")
+        return observations
 
 
 class MergedIntakeInterpreter(object):
@@ -316,6 +334,35 @@ def _document_messages(text, wanted_fields):
     ]
 
 
+def _case_analysis_messages(context):
+    facts = context.get("facts") or {}
+    allowed_limbs = context.get("allowed_limbs") or []
+    return [
+        {"role": "system", "content": (
+            "You are preparing UK visitor visa whole-case review notes for a human adviser. "
+            "Return only a JSON object with an observations array. Each observation must have "
+            "limb, observation, evidence_refs, missing_context, and question. "
+            "Use only facts supplied by the user message. Each evidence_ref must copy an exact "
+            "source and value from the supplied facts. Do not invent facts. Do not predict an "
+            "outcome, score the case, or say whether the evidence is sufficient or insufficient. "
+            "Prefer at most five concise observations that would help an adviser ask follow-up "
+            "questions.")},
+        {"role": "user", "content": json.dumps({
+            "allowed_limbs": list(allowed_limbs),
+            "facts": facts,
+            "output_schema": {
+                "observations": [{
+                    "limb": "one of allowed_limbs",
+                    "observation": "evidence-backed adviser review note",
+                    "evidence_refs": [{"source": "fact key", "value": "exact fact value"}],
+                    "missing_context": "what context the adviser may need",
+                    "question": "client-facing follow-up question",
+                }]
+            },
+        }, ensure_ascii=False)},
+    ]
+
+
 def intake_client_from_env():
     api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
@@ -323,7 +370,9 @@ def intake_client_from_env():
     model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
     model = _normalise_model_name(model)
     base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
-    return ChatCompletionsIntakeClient(api_key=api_key, model=model, base_url=base_url)
+    return ChatCompletionsIntakeClient(
+        api_key=api_key, model=model, base_url=base_url,
+        timeout=_timeout_from_env())
 
 
 def document_client_from_env():
@@ -333,7 +382,34 @@ def document_client_from_env():
     model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
     model = _normalise_model_name(model)
     base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
-    return ChatCompletionsDocumentClient(api_key=api_key, model=model, base_url=base_url)
+    return ChatCompletionsDocumentClient(
+        api_key=api_key, model=model, base_url=base_url,
+        timeout=_timeout_from_env())
+
+
+def case_analysis_client_from_env():
+    if not _env_enabled("VISA_AGENT_CASE_ANALYSIS_LLM"):
+        return None
+    api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        return None
+    model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
+    model = _normalise_model_name(model)
+    base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
+    return ChatCompletionsCaseAnalysisClient(
+        api_key=api_key, model=model, base_url=base_url,
+        timeout=_timeout_from_env())
+
+
+def _env_enabled(name):
+    return str(os.environ.get(name, "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _timeout_from_env(default=20):
+    try:
+        return int(os.environ.get("VISA_AGENT_LLM_TIMEOUT", default))
+    except (TypeError, ValueError):
+        return default
 
 
 def _normalise_model_name(model):

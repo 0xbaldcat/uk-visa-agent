@@ -5,6 +5,7 @@ The model is allowed exactly three jobs. Everything else is code:
   1. parse_reply    - free text -> structured slot values
   2. extract_fields - document -> structured fields
   3. draft_paragraph- a risk observation -> client-facing prose
+  4. analyse_case   - fact ledger -> candidate whole-case observations
 
 Two properties matter more than which model sits behind this:
 
@@ -32,6 +33,9 @@ class Model(object):
         raise NotImplementedError
 
     def draft_paragraph(self, risk, case_facts):
+        raise NotImplementedError
+
+    def analyse_case(self, context):
         raise NotImplementedError
 
 

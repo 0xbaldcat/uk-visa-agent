@@ -953,6 +953,7 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertIn("Evidence refs", rendered)
         self.assertNotIn("probability", rendered.lower())
         self.assertNotIn("approved", rendered.lower())
+        self.assertEqual(analysis["candidate_source"], "deterministic_fallback")
 
     def test_model_candidates_must_cite_real_facts_and_avoid_verdicts(self):
         cl = load()
@@ -988,6 +989,48 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertEqual(analysis["observations"][0]["limb"], "funds")
         self.assertEqual(len(analysis["rejected"]), 2)
         self.assertEqual(model.calls[0][0], "analyse_case")
+        self.assertEqual(analysis["candidate_source"], "model")
+
+    def test_email_model_delegates_whole_case_analysis_to_client(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        client = CaseAnalysisModel([{
+            "limb": "funds",
+            "observation": "Trip cost should be reviewed against the evidenced balance.",
+            "evidence_refs": [
+                {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
+                {"source": "bank_statements.closing_balance", "value": "5100.00"},
+            ],
+            "missing_context": "Monthly fixed costs.",
+            "question": "Can you explain regular income and fixed monthly costs?",
+        }])
+        model = email_model.EmailDemoModel(case_analysis_client=client)
+
+        analysis = case_analysis.analyse(cl, case, model=model)
+
+        self.assertEqual(len(analysis["observations"]), 1)
+        self.assertEqual(analysis["observations"][0]["limb"], "funds")
+        self.assertEqual(client.calls[0][0], "analyse_case")
+
+    def test_chat_case_analysis_client_reads_observations_array(self):
+        client = email_model.ChatCompletionsCaseAnalysisClient(
+            api_key="test", model="test-model", base_url="https://example.invalid")
+        client._complete_json = lambda messages: {
+            "observations": [{
+                "limb": "funds",
+                "observation": "Trip cost should be reviewed against the evidenced balance.",
+                "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
+                "missing_context": "Monthly fixed costs.",
+                "question": "Can you explain fixed monthly costs?",
+            }]
+        }
+
+        got = client.analyse_case({
+            "facts": {"bank_statements.closing_balance": "5100.00"},
+            "allowed_limbs": ["funds"],
+        })
+
+        self.assertEqual(got[0]["limb"], "funds")
 
     def test_review_pack_includes_whole_case_analysis_layer(self):
         cl = load()
