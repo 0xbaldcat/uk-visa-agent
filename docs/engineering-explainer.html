@@ -26,6 +26,7 @@
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
+      overflow-x: hidden;
       color: var(--ink);
       background:
         radial-gradient(circle at 88% 4%, rgba(40, 130, 106, .12), transparent 24rem),
@@ -61,7 +62,7 @@
       letter-spacing: .04em;
     }
     .eyebrow::before { content: ""; width: 26px; height: 2px; background: #88d4bb; }
-    h1 { max-width: 900px; margin: 0; font-size: 46px; line-height: 1.12; letter-spacing: -.02em; }
+    h1 { max-width: 900px; margin: 0; overflow-wrap: anywhere; font-size: 46px; line-height: 1.12; letter-spacing: -.02em; }
     .lead { max-width: 900px; margin: 18px 0 0; color: #dbece5; font-size: 19px; }
     .hero-points {
       display: flex;
@@ -117,7 +118,7 @@
     p { margin: 9px 0; }
     strong { font-weight: 760; }
     .muted { color: var(--muted); }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
     .card {
       padding: 17px;
       border: 1px solid var(--line);
@@ -284,6 +285,7 @@
       .toc { position: static; margin-bottom: 0; }
       .toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workflow-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .workflow-step:nth-child(2)::after { display: none; }
       .arch-row.core { grid-template-columns: 1fr; }
       .evolution { grid-template-columns: 1fr; }
@@ -295,7 +297,7 @@
       h1 { font-size: 31px; }
       .lead { font-size: 17px; }
       section { padding: 22px 18px; border-radius: 13px; }
-      .grid-3, .split, .controls, .workflow-row, .arch-row.channels { grid-template-columns: 1fr; }
+      .grid-4, .split, .controls, .workflow-row, .arch-row.channels { grid-template-columns: 1fr; }
       .workflow-step::after { display: none !important; }
       .toc nav { grid-template-columns: 1fr; }
     }
@@ -305,7 +307,7 @@
   <header>
     <div class="wrap hero">
       <p class="eyebrow">产品与架构亮点 · UK Standard Visitor PoC</p>
-      <h1>英国visitor签证材料准备Agent</h1>
+      <h1>英国visitor<wbr>签证材料准备<wbr>Agent</h1>
       <p class="lead">
         像一名人类顾问一样，通过邮件与客户持续沟通，把零散回答和真实附件推进成一套
         可检查、可追溯、可由人工确认的签证申请材料包。
@@ -342,7 +344,7 @@
           主要演示场景，因为它能同时展示资金、长期停留、担保关系和国内联系等复杂问题；
           这只是 reference scenario，不代表产品只服务探亲客户。
         </p>
-        <div class="grid-3">
+        <div class="grid-4">
           <div class="card">
             <span class="label">完成什么</span>
             <strong>材料准备闭环</strong>
@@ -352,6 +354,11 @@
             <span class="label">为什么需要 Agent</span>
             <strong>客户输入天然混乱</strong>
             信息散落在多轮邮件、自由文本和不同格式的附件里，需要持续理解和追问。
+          </div>
+          <div class="card">
+            <span class="label">为什么需要 Workflow</span>
+            <strong>高代价步骤必须稳定</strong>
+            案件状态、材料清单、校验、补件和最终组包都要由固定规则控制，不能靠模型临场发挥。
           </div>
           <div class="card">
             <span class="label">明确不做</span>
