@@ -1035,8 +1035,6 @@ class TestAdminPanel(unittest.TestCase):
             subject, body, attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.")
             filenames = [a["filename"] for a in attachments]
-            md_report = next(a for a in attachments
-                             if a["filename"] == "visa-final-review-report.md")
             html_report = next(a for a in attachments
                                if a["filename"] == "visa-final-review-report.html")
             pdf_report = next(a for a in attachments
@@ -1045,12 +1043,12 @@ class TestAdminPanel(unittest.TestCase):
                             if a["filename"] == "passport-pass.pdf")
             self.assertIn("Adviser review complete", subject)
             self.assertIn("reviewed materials package", body)
-            self.assertIn("Reviewed by Alex.", md_report["content"])
-            self.assertIn("passport-pass.pdf", md_report["content"])
+            self.assertIn("Reviewed by Alex.", html_report["content"])
             self.assertIn("passport-pass.pdf", html_report["content"])
             self.assertTrue(pdf_report["content"].startswith(b"%PDF-1.4"))
-            self.assertIn("bank-fail.pdf", md_report["content"])
+            self.assertIn("bank-fail.pdf", html_report["content"])
             self.assertEqual(passport["content"], b"PASSPORT")
+            self.assertNotIn("visa-final-review-report.md", filenames)
             self.assertNotIn("bank-fail.pdf", filenames)
 
         subject, body, attachments = admin_panel.customer_notification(

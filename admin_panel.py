@@ -300,7 +300,6 @@ def customer_notification(cl, case, decision, note):
             "wrong before you use it.\n\n"
             "This service does not submit the visa application for you."
         ) % case.id
-        md_report = render_client_final_report(cl, case, note)
         html_report = render_client_final_report_html(cl, case, note)
         attachments = [{
             "filename": "visa-final-review-report.pdf",
@@ -310,10 +309,6 @@ def customer_notification(cl, case, decision, note):
             "filename": "visa-final-review-report.html",
             "content_type": "text/html",
             "content": html_report,
-        }, {
-            "filename": "visa-final-review-report.md",
-            "content_type": "text/markdown",
-            "content": md_report,
         }]
         attachments.extend(accepted_material_attachments(cl, case))
         return subject, body, attachments
