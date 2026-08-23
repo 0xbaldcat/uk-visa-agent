@@ -410,12 +410,12 @@
             <div class="workflow-step ai">
               <span class="number">6</span>
               <strong>整案关系分析</strong>
-              <p>AI 基于事实账本提出顾问值得追问的问题，每条观察都必须引用真实事实。</p>
+              <p>AI 基于事实账本生成有引用的正向或风险观察；没有重大缺口时，候选问题可以为空。</p>
             </div>
             <div class="workflow-step human">
               <span class="number">7</span>
               <strong>转交人工顾问</strong>
-              <p>顾问查看材料、失败原因和整案观察；从此接管客户沟通，不再自动重跑整案 LLM。</p>
+              <p>顾问独立复核；有问题才联系客户，没有问题则直接进入选材和打包。</p>
             </div>
             <div class="workflow-step">
               <span class="number">8</span>
@@ -478,13 +478,14 @@
         <h2>Admin Panel：不是“审批按钮”，而是顾问接管后的工作台</h2>
         <p>
           整案 LLM 的输出只给人类顾问看，不直接变成客户邮件。案件一旦进入人工复核，自动分析阶段结束；
-          顾问判断哪些问题真正重要、是否需要追问、是否需要补充材料，并一直处理到最终组包。
+          顾问判断哪些问题真正重要、是否需要追问、是否需要补充材料。若机器和顾问都未发现重大问题，
+          无需为了走流程而联系客户，可直接进入最终组包。
         </p>
         <div class="grid-4">
           <div class="card">
             <span class="label">判断依据</span>
             <strong>风险与证据同屏</strong>
-            查看 LLM 候选问题、触发原因、原始事实引用和规则来源；顾问可以采纳、改写或忽略。
+            同时查看正向观察、风险观察、候选问题、原始事实引用和规则来源；顾问可以采纳、改写或忽略。
           </div>
           <div class="card">
             <span class="label">客户沟通</span>
@@ -522,7 +523,7 @@
         </div>
         <div class="callout amber">
           <strong>关键控制权转移：</strong>进入人工复核不是“让人点一下批准后继续自动跑”，而是一次明确的控制权交接。
-          后续客户沟通、补充材料判断和最终材料选择均由顾问负责。
+          后续客户沟通、补充材料判断和最终材料选择均由顾问负责；没有问题时，客户沟通步骤可以跳过。
         </div>
       </section>
 
@@ -535,7 +536,7 @@
             <ul>
               <li>理解客户不完整、乱序的自然语言</li>
               <li>从 PDF、Word 和图片中提取候选事实</li>
-              <li>跨材料发现值得顾问追问的关系</li>
+              <li>跨材料识别相互印证或值得顾问追问的关系</li>
               <li>在自动收集阶段把固定要求表达成自然、个性化的回复</li>
             </ul>
           </div>
@@ -563,7 +564,7 @@
         <h2>AI 交付稳定性：靠控制面，而不是只靠提示词</h2>
         <p class="muted">我们假设模型可能超时、误读、格式错误或引用不准，因此把失败变成显式状态，而不是让它悄悄进入交付物。</p>
         <div class="controls">
-          <div class="control"><span class="icon">01</span><div><strong>结构化输出</strong><p>AI 只提交候选字段或候选观察；格式不合格就拒绝，不直接写入最终结论。</p></div></div>
+          <div class="control"><span class="icon">01</span><div><strong>结构化输出</strong><p>AI 提交正向/风险候选观察和可为空的追问列表；格式不合格就拒绝，不直接写入最终结论。</p></div></div>
           <div class="control"><span class="icon">02</span><div><strong>事实引用</strong><p>整案观察必须标明依据；引用来源不存在或取值不一致，就不会进入人工复核包。</p></div></div>
           <div class="control"><span class="icon">03</span><div><strong>规则给出默认值</strong><p>材料要求和机器校验由确定性规则控制；最终组包由顾问在这些默认值上勾选或反选。</p></div></div>
           <div class="control"><span class="icon">04</span><div><strong>失败关闭</strong><p>附件无法读取、检查器未知或事实不确定时要求补件；系统不会“猜一个答案继续”。</p></div></div>
@@ -574,6 +575,10 @@
           <strong>真实 LLM 测试证明护栏在工作：</strong>
           当前真实测试生成 5 条有事实引用的顾问问题并全部通过；此前模型曾自行加入官方规则没有的“过去十年”时间范围，
           现已由通用时间窗口校验拦截。这里展示的不是“模型永远正确”，而是“模型出错时系统能抓住”。
+        </div>
+        <div class="callout">
+          <strong>零问题也是有效结果：</strong>系统不强迫模型寻找问题。若证据在已检查维度内相互一致，分析可以只给出有依据的正向观察，
+          并返回空的追问列表；顾问复核无异议后直接组包。正向观察不等于成功率预测。
         </div>
       </section>
 
