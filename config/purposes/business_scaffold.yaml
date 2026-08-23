@@ -1,0 +1,22 @@
+component_id: purpose_business_scaffold
+component_label: 'Standard Visitor purpose scaffold: business'
+config_version: 0.1.0
+data_status: UNVERIFIED_PLACEHOLDER
+evidence:
+- id: business_invitation
+  label: Business invitation or meeting evidence
+  category: purpose
+  required_when:
+    slot: visit_purpose
+    equals: business
+  why: 'Scaffold: production route should define permitted business activity evidence
+    and sources.'
+  source: UNVERIFIED_PLACEHOLDER
+  extract:
+  - inviting_organisation
+  - business_activity
+  checks:
+  - kind: field_present
+    fields:
+    - inviting_organisation
+    - business_activity

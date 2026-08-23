@@ -5,6 +5,7 @@ place allowed to answer "what does this application need", which is how we keep
 failure mode #1 (model inventing a requirement) structurally impossible.
 """
 import os
+import copy
 from typing import Optional, Dict, Any, List
 
 import yaml
@@ -30,6 +31,10 @@ class Checklist(object):
         self.route_label = data["route_label"]
         self.config_version = data["config_version"]
         self.data_status = data.get("data_status", PLACEHOLDER)
+        self.visa_type = data.get("visa_type")
+        self.purposes = data.get("purposes", [])
+        self.components = data.get("components", [])
+        self.scope_note = data.get("scope_note")
 
     # --- provenance -----------------------------------------------------
 
@@ -156,5 +161,72 @@ def load(path, sources_path=None):
 
 def load_route(route_id, config_dir=None):
     config_dir = config_dir or os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
+    registry_path = os.path.join(config_dir, "routes.yaml")
+    if os.path.exists(registry_path):
+        with open(registry_path) as fh:
+            registry = yaml.safe_load(fh) or {}
+        route = (registry.get("routes") or {}).get(route_id)
+        if route:
+            data = _compose_route(route, config_dir)
+            return Checklist(data, path=registry_path,
+                             sources=_load_sources(config_dir))
     return load(os.path.join(config_dir, "%s.yaml" % route_id),
                 sources_path=os.path.join(config_dir, "sources.yaml"))
+
+
+def _load_sources(config_dir):
+    path = os.path.join(config_dir, "sources.yaml")
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return yaml.safe_load(fh)
+
+
+def _compose_route(route, config_dir):
+    data = {
+        "route_id": route["route_id"],
+        "route_label": route["route_label"],
+        "visa_type": route.get("visa_type"),
+        "purposes": list(route.get("purposes") or []),
+        "config_version": route.get("config_version", "0.0.0"),
+        "data_status": route.get("data_status", PLACEHOLDER),
+        "components": list(route.get("components") or []),
+        "scope_note": route.get("scope_note"),
+        "genuine_visitor_test": [],
+        "intake_slots": [],
+        "evidence": [],
+        "risk_factors": [],
+        "home_ties": [],
+    }
+    statuses = [data["data_status"]]
+    for component_id in data["components"]:
+        component = _load_component(config_dir, component_id)
+        statuses.append(component.get("data_status", PLACEHOLDER))
+        for key in ("genuine_visitor_test", "intake_slots", "evidence",
+                    "risk_factors", "home_ties"):
+            _merge_list_by_id(data[key], component.get(key, []))
+    if any(status != "VERIFIED" for status in statuses):
+        data["data_status"] = PLACEHOLDER
+    return data
+
+
+def _load_component(config_dir, component_id):
+    path = os.path.join(config_dir, "%s.yaml" % component_id)
+    if not os.path.exists(path):
+        raise FileNotFoundError("route component not found: %s" % path)
+    with open(path) as fh:
+        return yaml.safe_load(fh) or {}
+
+
+def _merge_list_by_id(target, incoming):
+    index = dict((item["id"], pos) for pos, item in enumerate(target))
+    for item in incoming or []:
+        item = copy.deepcopy(item)
+        existing = index.get(item["id"])
+        if existing is None:
+            index[item["id"]] = len(target)
+            target.append(item)
+        else:
+            merged = copy.deepcopy(target[existing])
+            merged.update(item)
+            target[existing] = merged

@@ -169,10 +169,36 @@ class TestProvenance(unittest.TestCase):
     def test_shipped_config_is_fully_sourced(self):
         self.assertEqual(load().unsourced(), [])
 
+    def test_family_route_is_composed_from_versioned_components(self):
+        cl = load()
+
+        self.assertEqual(cl.visa_type, "standard_visitor")
+        self.assertEqual(cl.purposes, ["family_visit"])
+        self.assertEqual(cl.components, [
+            "standard_visitor_core",
+            "purposes/family_visit",
+            "applicant_financial_home_profile",
+        ])
+        self.assertTrue(cl.is_verified)
+        self.assertEqual([slot["id"] for slot in cl.slots], [
+            "applicant_name", "nationality", "trip_start", "trip_end",
+            "visit_purpose", "has_uk_settled_relative", "employment_status",
+            "third_party_funding", "prior_uk_refusal", "estimated_trip_cost_gbp",
+        ])
+
     def test_dangling_source_id_counts_as_unsourced(self):
         cl = load()
         cl.data["evidence"][0]["source"] = "no_such_source"
         self.assertIn("evidence:passport", cl.unsourced())
+
+    def test_scaffold_routes_are_loadable_but_not_verified(self):
+        cl = checklist_mod.load_route("visitor_tourism")
+        ids = [ev["id"] for ev in cl.required_evidence(
+            dict(SLOTS, visit_purpose="tourism"))]
+
+        self.assertFalse(cl.is_verified)
+        self.assertIn("tourism_itinerary_notes", ids)
+        self.assertIn("evidence:tourism_itinerary_notes", cl.unsourced())
 
     def test_volatile_values_carry_their_date(self):
         entry = load().volatile_value("fee_standard_visitor_6m_gbp")

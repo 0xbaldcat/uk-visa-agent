@@ -1,0 +1,20 @@
+component_id: purpose_tourism_scaffold
+component_label: 'Standard Visitor purpose scaffold: tourism'
+config_version: 0.1.0
+data_status: UNVERIFIED_PLACEHOLDER
+evidence:
+- id: tourism_itinerary_notes
+  label: Tourism itinerary notes
+  category: itinerary
+  required_when:
+    slot: visit_purpose
+    equals: tourism
+  why: 'Scaffold: production route should define tourism-specific itinerary expectations
+    and sources.'
+  source: UNVERIFIED_PLACEHOLDER
+  extract:
+  - planned_activities
+  checks:
+  - kind: field_present
+    fields:
+    - planned_activities

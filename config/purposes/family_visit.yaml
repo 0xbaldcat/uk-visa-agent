@@ -1,0 +1,72 @@
+component_id: purpose_family_visit
+component_label: 'Standard Visitor purpose pack: family visit'
+config_version: 1.0.0
+data_status: VERIFIED
+intake_slots:
+- id: has_uk_settled_relative
+  question: Do you have a relative in the UK who is British or settled there, and
+    will you be staying with them?
+  prompt_hint: whether a settled or British relative in the UK is hosting them
+  type: bool
+evidence:
+- id: sponsor_invitation_letter
+  label: Invitation letter from your UK relative
+  category: sponsorship
+  required_when:
+    slot: has_uk_settled_relative
+    equals: true
+  why: Send a letter from your UK relative showing their name, address, and relationship
+    to you. Include visit dates, accommodation arrangements, and financial support
+    details if relevant.
+  source: caseworker_guidance
+  extract:
+  - sponsor_name
+  - sponsor_address
+  - relationship
+  - stay_start
+  - stay_end
+  - funding_offered
+  checks:
+  - kind: field_present
+    fields:
+    - sponsor_name
+    - sponsor_address
+    - relationship
+  - kind: cross_document_consistency
+    field: sponsor_name
+    other_evidence: sponsor_status_proof
+    other_field: sponsor_name
+    note: sponsor named in the invitation must be the sponsor whose status is evidenced
+    source: caseworker_guidance
+- id: sponsor_status_proof
+  label: Proof of your sponsor's UK immigration status
+  category: sponsorship
+  required_when:
+    slot: has_uk_settled_relative
+    equals: true
+  why: Send a copy of your UK relative's British passport, biometric residence permit,
+    eVisa/share-code evidence, or other proof showing their name and UK status.
+  source: supporting_docs
+  extract:
+  - sponsor_name
+  - status_type
+  checks:
+  - kind: field_present
+    fields:
+    - sponsor_name
+    - status_type
+risk_factors:
+- id: settled_relative_in_uk
+  label: Settled relative in the UK
+  trigger:
+    slot: has_uk_settled_relative
+    equals: true
+  relates_to:
+  - will_leave
+  observation: Caseworker guidance lists an applicant who has few family or economic
+    ties at home but several relatives in the UK as a circumstance that raises doubt
+    about the intention to leave.
+  ask: Because you have family settled in the UK, it helps to show clearly what keeps
+    you anchored at home. Besides your work, do you have property, dependants, or
+    other family in your home country we can evidence?
+  source: caseworker_guidance

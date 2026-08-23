@@ -13,7 +13,7 @@ submission API, so that step is permanently the applicant's own.
 python3 -m pip install -r requirements.txt
 python3 demo.py                              # WhatsApp + email walkthrough
 python3 demo.py --email-only                 # fallback demo if WhatsApp is unavailable
-python3 -m unittest discover -s tests        # 54 tests
+python3 -m unittest discover -s tests        # full regression suite
 ```
 
 The model seam is stubbed, so the demo is offline and deterministic.
@@ -26,6 +26,13 @@ bounded repair attempt. The trace is recorded in `ingress_events`.
 The review pack also includes a whole-case analysis layer: code prepares a fact
 context, an optional model may propose evidence-backed observations, and code
 rejects observations with missing references or outcome/sufficiency claims.
+
+Routes are composed from versioned rule packs rather than copied per scenario.
+`config/routes.yaml` maps a route to shared Standard Visitor core rules, one or
+more purpose packs, and reusable applicant profile packs. The current verified
+reference scenario is `visitor_family_visit`; tourism and business are scaffold
+routes that show the extension shape but remain unverified until their sources,
+fixtures and adviser SOP are added.
 
 ## Documentation
 

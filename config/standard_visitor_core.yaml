@@ -1,0 +1,176 @@
+component_id: standard_visitor_core
+component_label: UK Standard Visitor core
+config_version: 1.0.0
+data_status: VERIFIED
+genuine_visitor_test:
+- id: will_leave
+  limb: V 4.2(a)
+  text: will leave the UK at the end of their visit
+  source: appendix_v
+- id: no_de_facto_residence
+  limb: V 4.2(b)
+  text: will not live in the UK for extended periods through frequent or successive
+    visits, or make the UK their main home
+  source: appendix_v
+- id: permitted_purpose
+  limb: V 4.2(c)
+  text: is genuinely seeking entry for a purpose permitted by the visitor routes
+  source: appendix_v
+- id: sufficient_funds
+  limb: V 4.2(d)
+  text: will have sufficient funds to cover all reasonable costs without working or
+    accessing public funds
+  source: appendix_v
+intake_slots:
+- id: applicant_name
+  question: To start, what's your full name exactly as it appears in your passport?
+  prompt_hint: full name exactly as printed in the passport
+  type: text
+- id: nationality
+  question: What nationality is your passport?
+  prompt_hint: passport nationality
+  type: text
+- id: trip_start
+  question: What date are you planning to arrive in the UK?
+  prompt_hint: intended arrival date in the UK
+  type: date
+- id: trip_end
+  question: And what date do you plan to leave the UK?
+  prompt_hint: intended departure date from the UK
+  type: date
+- id: visit_purpose
+  question: What's the main purpose of your visit?
+  prompt_hint: purpose of the visit
+  type: enum
+  values:
+  - family_visit
+  - tourism
+  - business
+  - medical
+  - study_short
+evidence:
+- id: passport
+  label: Passport biographic page (plus previous visa pages)
+  category: identity
+  required: always
+  why: Send the passport page with your photo and personal details. If you have previous
+    visas or entry stamps from the UK or other countries, include clear copies of
+    those pages too.
+  source: caseworker_guidance
+  extract:
+  - holder_name
+  - passport_number
+  - expiry_date
+  - nationality
+  - prior_compliant_travel
+  checks:
+  - kind: field_present
+    fields:
+    - holder_name
+    - passport_number
+    - expiry_date
+  - kind: name_matches
+    field: holder_name
+    slot: applicant_name
+  - kind: date_after
+    field: expiry_date
+    relative_to_slot: trip_end
+    note: passport should remain valid for the whole stay
+    source: industry_practice
+- id: bank_statements
+  label: Personal bank statements (recent months)
+  category: funds
+  required: always
+  why: Send recent personal bank statements showing the account holder name, statement
+    start and end dates, transactions, and closing balance.
+  source: appendix_v
+  extract:
+  - account_holder_name
+  - period_start
+  - period_end
+  - closing_balance
+  - currency
+  checks:
+  - kind: field_present
+    fields:
+    - account_holder_name
+    - period_start
+    - period_end
+    - closing_balance
+  - kind: name_matches
+    field: account_holder_name
+    slot: applicant_name
+  - kind: covers_days
+    start_field: period_start
+    end_field: period_end
+    min_days: 180
+    advisory: true
+    note: 6 months is common practice, not a legal requirement
+    source: industry_practice
+  - kind: recent_within_days
+    field: period_end
+    max_age_days: 31
+    advisory: true
+    note: statements should be recent at the point of application
+    source: industry_practice
+- id: travel_itinerary
+  label: Travel booking or itinerary showing return travel
+  category: itinerary
+  required: always
+  why: Send a flight booking, reservation, or planned itinerary showing your outbound
+    and return travel dates. Include the passenger name if it is shown on the document.
+  source: supporting_docs
+  extract:
+  - outbound_date
+  - return_date
+  - passenger_name
+  checks:
+  - kind: field_present
+    fields:
+    - outbound_date
+    - return_date
+  - kind: name_matches
+    field: passenger_name
+    slot: applicant_name
+  - kind: date_before
+    field: outbound_date
+    relative_to_field: return_date
+  - kind: date_matches_slot
+    field: return_date
+    slot: trip_end
+    tolerance_days: 3
+    advisory: true
+    note: itinerary return date should line up with the stated departure date
+    source: caseworker_guidance
+- id: accommodation_proof
+  label: Proof of where you will stay
+  category: itinerary
+  required: always
+  why: Send a hotel booking, accommodation confirmation, or host address showing the
+    UK address where you plan to stay.
+  source: supporting_docs
+  extract:
+  - address
+  - host_name
+  - stay_start
+  - stay_end
+  checks:
+  - kind: field_present
+    fields:
+    - address
+risk_factors:
+- id: long_stay
+  label: Long stay relative to a typical visit
+  trigger:
+    computed: stay_length_days
+    gt: 60
+  relates_to:
+  - will_leave
+  - no_de_facto_residence
+  observation: Length of stay and the pattern of time spent in the UK over the previous
+    12 months are explicit assessment factors. A long stay invites questions about
+    how the applicant supports themselves and why they can be away that long.
+  ask: You are planning a fairly long stay. It helps to explain why the visit needs
+    to be that long, and to show how your commitments at home continue while you are
+    away. Can you tell me more about both?
+  source: caseworker_guidance

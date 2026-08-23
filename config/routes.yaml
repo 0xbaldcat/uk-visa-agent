@@ -1,0 +1,43 @@
+routes:
+  visitor_family_visit:
+    route_id: visitor_family_visit
+    route_label: Standard Visitor (family visit reference scenario)
+    visa_type: standard_visitor
+    purposes:
+    - family_visit
+    config_version: 1.1.0
+    data_status: VERIFIED
+    components:
+    - standard_visitor_core
+    - purposes/family_visit
+    - applicant_financial_home_profile
+    scope_note: Product scope is UK Standard Visitor; this route is the family-visit
+      reference scenario for the PoC.
+  visitor_tourism:
+    route_id: visitor_tourism
+    route_label: Standard Visitor (tourism scaffold)
+    visa_type: standard_visitor
+    purposes:
+    - tourism
+    config_version: 0.1.0
+    data_status: UNVERIFIED_PLACEHOLDER
+    components:
+    - standard_visitor_core
+    - purposes/tourism_scaffold
+    - applicant_financial_home_profile
+    scope_note: Scaffold route showing extension shape; not yet approved for live
+      use.
+  visitor_business:
+    route_id: visitor_business
+    route_label: Standard Visitor (business scaffold)
+    visa_type: standard_visitor
+    purposes:
+    - business
+    config_version: 0.1.0
+    data_status: UNVERIFIED_PLACEHOLDER
+    components:
+    - standard_visitor_core
+    - purposes/business_scaffold
+    - applicant_financial_home_profile
+    scope_note: Scaffold route showing extension shape; not yet approved for live
+      use.

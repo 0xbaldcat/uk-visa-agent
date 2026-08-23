@@ -1,8 +1,9 @@
 # UK Visitor Visa Preparation Agent — design notes
 
 A WhatsApp/email agent that takes a client from "I want to visit my sister in
-Manchester" to a checked, assembled application pack. Scope is one route: Standard
-Visitor, family-visit scenario.
+Manchester" to a checked, assembled application pack. Product scope is UK
+Standard Visitor; the current PoC's fully tested reference scenario is a
+family visit with a settled UK relative.
 
 The two questions this document answers are **how delivery is kept stable** and
 **where an agent is used instead of a fixed workflow**.
@@ -265,9 +266,12 @@ Out of scope here, but real:
 
 ```
 config/sources.yaml               provenance registry + volatile dated values
-config/visitor_family_visit.yaml  the route: slots, evidence, checks, risk factors
+config/routes.yaml                route registry: visa type, purposes, component list
+config/standard_visitor_core.yaml shared Standard Visitor slots/evidence/checks
+config/purposes/*.yaml            purpose packs such as family_visit, tourism scaffold
+config/applicant_*.yaml           reusable funding, employment and home-tie profile
 src/state.py                      stages, legal transitions, next_action()
-src/checklist.py                  the only module that answers "what is required"
+src/checklist.py                  composes route packs; only module that answers "what is required"
 src/validate.py                   deterministic checks; advisory vs blocking
 src/diagnose.py                   risk observations, tie coverage, funds picture
 src/facts.py                      fabrication guard

@@ -473,8 +473,8 @@
         <tbody>
           <tr>
             <td>LLM 编造材料要求</td>
-            <td>规则外置，只有 YAML + source id 能定义要求。</td>
-            <td><code>config/visitor_family_visit.yaml</code> + <code>config/sources.yaml</code></td>
+            <td>规则外置，只有 route registry + versioned rule pack + source id 能定义要求。</td>
+            <td><code>config/routes.yaml</code> + <code>config/*</code> rule packs + <code>config/sources.yaml</code></td>
           </tr>
           <tr>
             <td>LLM 输出错误 JSON</td>
@@ -589,7 +589,7 @@
           </tr>
           <tr>
             <td>规则 YAML 手工维护。</td>
-            <td>规则版本、effective date、GOV.UK 监控、变更 review 流程。</td>
+            <td>规则包版本、effective date、GOV.UK 监控、变更 review 流程。</td>
           </tr>
           <tr>
             <td>LLM fallback 简化。</td>
@@ -605,7 +605,7 @@
           </tr>
           <tr>
             <td>PoC 产品类型是 UK Standard Visitor，但只完整覆盖探亲 reference scenario。</td>
-            <td>旅游、短期商务等目的需要独立配置、测试夹具、材料规则和人工审核 SOP。</td>
+            <td>已有 route registry 和组件化 rule pack；旅游、短期商务等目的继续补 verified purpose pack、测试夹具和人工审核 SOP。</td>
           </tr>
         </tbody>
       </table>

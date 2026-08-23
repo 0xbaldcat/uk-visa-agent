@@ -1,0 +1,225 @@
+component_id: applicant_financial_home_profile
+component_label: Applicant funding, employment and home ties profile
+config_version: 1.0.0
+data_status: VERIFIED
+intake_slots:
+- id: employment_status
+  question: What's your current work situation - employed, self-employed, studying,
+    retired, or not currently working?
+  prompt_hint: employed / self-employed / student / retired / unemployed
+  type: enum
+  values:
+  - employed
+  - self_employed
+  - student
+  - retired
+  - unemployed
+- id: third_party_funding
+  question: Is anyone else paying for this trip, or are you funding it yourself?
+  prompt_hint: whether someone else is paying for the trip
+  type: bool
+- id: prior_uk_refusal
+  question: Have you ever been refused a visa by the UK or any other country?
+  prompt_hint: whether they have ever been refused a UK visa or any other country's
+    visa
+  type: bool
+- id: estimated_trip_cost_gbp
+  question: Roughly what do you expect the whole trip to cost in pounds, including
+    flights, accommodation and spending money?
+  prompt_hint: rough total cost of the trip in GBP (flights, accommodation, living
+    costs)
+  type: number
+evidence:
+- id: sponsor_financial_evidence
+  label: Your sponsor's bank statements
+  category: sponsorship
+  required_when:
+    slot: third_party_funding
+    equals: true
+  why: Send your sponsor's recent bank statements showing the account holder name,
+    statement start and end dates, transactions, and closing balance.
+  source: caseworker_guidance
+  extract:
+  - account_holder_name
+  - period_start
+  - period_end
+  - closing_balance
+  - currency
+  checks:
+  - kind: field_present
+    fields:
+    - account_holder_name
+    - period_start
+    - period_end
+    - closing_balance
+- id: employment_letter
+  label: Employer letter confirming employment and approved leave
+  category: home_ties
+  required_when:
+    slot: employment_status
+    equals: employed
+  why: Send an employer letter showing your employer name and job title. Include salary,
+    approved leave dates, and expected return-to-work date if available.
+  source: caseworker_guidance
+  extract:
+  - employer_name
+  - job_title
+  - leave_start
+  - leave_end
+  - annual_salary
+  checks:
+  - kind: field_present
+    fields:
+    - employer_name
+    - job_title
+  - kind: date_matches_slot
+    field: leave_end
+    slot: trip_end
+    tolerance_days: 7
+    advisory: true
+    note: approved leave should cover the intended trip
+    source: industry_practice
+- id: self_employment_evidence
+  label: Business registration, tax records and business bank statements
+  category: home_ties
+  required_when:
+    slot: employment_status
+    equals: self_employed
+  why: Send documents showing your business name, registration number, recent tax
+    year and declared income, plus business bank statement start and end dates.
+  source: caseworker_guidance
+  extract:
+  - business_name
+  - registration_id
+  - tax_year
+  - declared_income
+  - business_statement_period_start
+  - business_statement_period_end
+  checks:
+  - kind: field_present
+    fields:
+    - business_name
+    - registration_id
+    - tax_year
+    - declared_income
+    - business_statement_period_start
+    - business_statement_period_end
+- id: home_ties_evidence
+  label: Evidence of your ties to your home country (property, family, dependants,
+    studies)
+  category: home_ties
+  required: always
+  why: Send documents that show the type of home-country ties you want us to record,
+    such as property, family or dependant responsibilities, studies, or other ongoing
+    obligations.
+  source: caseworker_guidance
+  extract:
+  - tie_types
+  checks:
+  - kind: field_present
+    fields:
+    - tie_types
+risk_factors:
+- id: irregular_income
+  label: Self-employed or irregular income
+  trigger:
+    slot: employment_status
+    in:
+    - self_employed
+    - unemployed
+  relates_to:
+  - sufficient_funds
+  - will_leave
+  observation: Self-employment, recent job changes and irregular income are documented
+    as higher-scrutiny circumstances because the economic tie is harder to evidence.
+  ask: 'For self-employed applicants it usually helps to show the business is ongoing:
+    registration, tax records, and business account statements. Can you provide those?'
+  source: caseworker_guidance
+- id: third_party_funded
+  label: Trip funded by someone else
+  trigger:
+    slot: third_party_funding
+    equals: true
+  relates_to:
+  - sufficient_funds
+  observation: Third-party support is permitted, but the caseworker considers whether
+    the relationship is genuine and whether the funder can support both parties.
+  ask: Since someone else is funding the trip, we should evidence your relationship
+    with them and their ability to support both of you. Can you provide their statements
+    and something showing your ongoing contact?
+  source: caseworker_guidance
+- id: prior_refusal
+  label: Previous visa refusal
+  trigger:
+    slot: prior_uk_refusal
+    equals: true
+  relates_to:
+  - will_leave
+  - no_de_facto_residence
+  observation: A previous refusal or removal by any country is a negative factor the
+    caseworker will weigh, and previous immigration history must be disclosed.
+  ask: You mentioned a previous refusal. We need the refusal notice so the new application
+    addresses those reasons directly rather than repeating them.
+  source: caseworker_guidance
+- id: thin_home_ties
+  label: Few evidenced ties to the home country
+  trigger:
+    computed: home_tie_coverage
+    lt: 2
+  relates_to:
+  - will_leave
+  observation: Personal and economic ties to the country of residence are a core assessment
+    factor; where few are evidenced the will-leave limb rests on little.
+  ask: At the moment we have very little evidencing your ties at home. Property, dependants,
+    ongoing studies, or care responsibilities all help. What applies to you?
+  source: caseworker_guidance
+home_ties:
+- id: employment_tie
+  label: Employment or business in the home country
+  satisfied_by:
+  - evidence: employment_letter
+    fields:
+    - employer_name
+    - job_title
+  - evidence: self_employment_evidence
+    fields:
+    - business_name
+    - registration_id
+    - tax_year
+    - declared_income
+    - business_statement_period_start
+    - business_statement_period_end
+- id: family_tie
+  label: Immediate family or dependants remaining in the home country
+  satisfied_by:
+  - evidence: home_ties_evidence
+    field: tie_types
+    contains_any:
+    - dependant
+    - dependent
+    - child
+    - children
+    - parent
+    - mother
+    - father
+    - spouse
+    - family
+- id: property_tie
+  label: Property or significant assets in the home country
+  satisfied_by:
+  - evidence: home_ties_evidence
+    field: tie_types
+    contains_any:
+    - property
+    - apartment
+    - mortgage
+    - house
+    - flat
+    - asset
+    - land
+- id: travel_history_tie
+  label: Prior travel history showing visa compliance
+  satisfied_by:
+  - evidence: passport
+    field: prior_compliant_travel
+    equals: true
