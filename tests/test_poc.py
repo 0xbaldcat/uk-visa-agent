@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "src"))
 
 import admin_panel
+import case_analysis
 import channels
 import checklist as checklist_mod
 import compose
@@ -128,6 +129,16 @@ class StaticDocumentFieldExtractor(object):
     def parse_document_candidate(self, text, wanted_fields):
         self.calls.append({"text": text, "wanted_fields": list(wanted_fields)})
         return dict(self.candidate)
+
+
+class CaseAnalysisModel(llm.StubModel):
+    def __init__(self, observations):
+        super(CaseAnalysisModel, self).__init__()
+        self.observations = observations
+
+    def analyse_case(self, context):
+        self.calls.append(("analyse_case", sorted(context["facts"].keys())))
+        return list(self.observations)
 
 
 def simple_pdf_bytes(lines):
@@ -373,6 +384,40 @@ class TestDeterminism(unittest.TestCase):
         self.assertIn("not a required UK visitor visa document", content)
         self.assertIn("long_stay", content)
         self.assertIn("narrative_draft_refused", audit_kinds)
+
+    def test_deliver_pack_uses_guarded_model_case_analysis(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        model = CaseAnalysisModel([
+            {
+                "limb": "funds",
+                "observation": "Trip cost should be reviewed against the evidenced balance.",
+                "evidence_refs": [
+                    {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
+                    {"source": "bank_statements.closing_balance", "value": "5100.00"},
+                ],
+                "missing_context": "Monthly fixed costs.",
+                "question": "Can you explain regular income and fixed monthly costs?",
+            },
+            {
+                "limb": "funds",
+                "observation": "This case is guaranteed.",
+                "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
+                "question": "ignored",
+            },
+        ])
+        eng = engine_mod.Engine(st, cl, model, today=TODAY)
+
+        result = eng._respond(st.get_case("t1"), state.Action("deliver_pack"))
+        content = result["review_pack"]["content"]
+
+        self.assertIn("Trip cost should be reviewed", content)
+        self.assertIn("Rejected Candidate Observations", content)
+        self.assertIn("forbidden outcome", content)
+        self.assertNotIn("This case is guaranteed", content)
+        self.assertIn("analyse_case", [call[0] for call in model.calls])
 
     def test_request_evidence_email_is_formatted_for_email_reading(self):
         cl = load()
@@ -891,6 +936,69 @@ class TestEvidenceCoverage(unittest.TestCase):
             sorted(f.field for f in validate.blocking(failures)),
             ["business_statement_period_end", "business_statement_period_start",
              "declared_income", "registration_id", "tax_year"])
+
+
+class TestWholeCaseAnalysis(unittest.TestCase):
+    def test_deterministic_analysis_cites_case_facts_without_verdict(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+
+        analysis = case_analysis.analyse(cl, case)
+        rendered = deliver.render_whole_case_analysis(analysis)
+
+        self.assertIn("intake.trip_length_days", analysis["facts"])
+        self.assertIn("bank_statements.closing_balance", analysis["facts"])
+        self.assertGreaterEqual(len(analysis["observations"]), 2)
+        self.assertIn("Whole-Case Analysis For Adviser Review", rendered)
+        self.assertIn("Evidence refs", rendered)
+        self.assertNotIn("probability", rendered.lower())
+        self.assertNotIn("approved", rendered.lower())
+
+    def test_model_candidates_must_cite_real_facts_and_avoid_verdicts(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        model = CaseAnalysisModel([
+            {
+                "limb": "funds",
+                "observation": "Trip cost should be reviewed against the evidenced balance.",
+                "evidence_refs": [
+                    {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
+                    {"source": "bank_statements.closing_balance", "value": "5100.00"},
+                ],
+                "missing_context": "Monthly fixed costs.",
+                "question": "Can you explain regular income and fixed monthly costs?",
+            },
+            {
+                "limb": "funds",
+                "observation": "This case is likely to succeed.",
+                "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
+                "question": "ignored",
+            },
+            {
+                "limb": "will_leave",
+                "observation": "References a made-up value.",
+                "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "9999"}],
+                "question": "ignored",
+            },
+        ])
+
+        analysis = case_analysis.analyse(cl, case, model=model)
+
+        self.assertEqual(len(analysis["observations"]), 1)
+        self.assertEqual(analysis["observations"][0]["limb"], "funds")
+        self.assertEqual(len(analysis["rejected"]), 2)
+        self.assertEqual(model.calls[0][0], "analyse_case")
+
+    def test_review_pack_includes_whole_case_analysis_layer(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+
+        pack = deliver.build_pack(cl, case, today=TODAY)
+        content = deliver.render_review_pack(pack)
+
+        self.assertIn("# Whole-Case Analysis For Adviser Review", content)
+        self.assertIn("Suggested question", content)
+        self.assertIn("intake.trip_length_days", content)
 
 
 class TestDemoScripts(unittest.TestCase):

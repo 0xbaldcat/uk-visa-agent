@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UK Visa Agent PoC - Engineering Explainer</title>
+  <title>英国 visitor 签证材料准备 Agent</title>
   <style>
     :root {
       --bg: #f6f7f5;
@@ -57,21 +57,44 @@
       color: var(--muted);
       font-size: 19px;
     }
-    nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      padding: 18px 0 24px;
+    .layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
     }
-    nav a {
+    .toc {
+      position: sticky;
+      top: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 18px;
+    }
+    .toc-title {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 10px;
+    }
+    .toc nav {
+      display: grid;
+      gap: 7px;
+    }
+    .toc a {
       color: var(--accent);
-      background: var(--accent-soft);
-      border: 1px solid #c8ded2;
+      border: 1px solid transparent;
       border-radius: 6px;
-      padding: 7px 10px;
+      padding: 8px 10px;
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
+    }
+    .toc a:hover,
+    .toc a.active {
+      background: var(--accent-soft);
+      border-color: #c8ded2;
     }
     main {
       padding: 28px 0 64px;
@@ -203,6 +226,14 @@
     }
     @media (max-width: 900px) {
       h1 { font-size: 32px; }
+      .layout { grid-template-columns: 1fr; }
+      .toc {
+        position: static;
+        margin-top: 0;
+      }
+      .toc nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .grid { grid-template-columns: 1fr; }
       .flow { grid-template-columns: 1fr 1fr; }
       table { display: block; overflow-x: auto; }
@@ -210,6 +241,7 @@
     @media (max-width: 560px) {
       .wrap { padding: 0 18px; }
       section { padding: 20px; }
+      .toc nav { grid-template-columns: 1fr; }
       .flow { grid-template-columns: 1fr; }
     }
   </style>
@@ -218,13 +250,20 @@
   <header>
     <div class="wrap hero">
       <p class="eyebrow">Engineering explainer · UK visitor visa service agent PoC</p>
-      <h1>用固定 workflow 控制签证材料交付，用 AI 处理真实客户输入</h1>
+      <h1>英国 visitor 签证材料准备 Agent</h1>
       <p class="lead">
         这个 PoC 展示一个基于 email / WhatsApp 风格交互的英国访客签材料顾问：
         它采访客户、生成个性化材料清单、接收真实附件、抽取字段、做材料质检、
-        追补失败材料，并在人工复核后把正确材料和 final report 打包给用户。
+        追补失败材料，并在人工复核前生成有证据引用的整案观察。人工顾问确认后，
+        系统把正确材料和 final report 打包给用户。
       </p>
-      <nav aria-label="Document sections">
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <aside class="toc" aria-label="Document sections">
+      <p class="toc-title">目录</p>
+      <nav>
         <a href="#scope">范围</a>
         <a href="#flow">流程</a>
         <a href="#architecture">架构</a>
@@ -232,11 +271,10 @@
         <a href="#stability">交付稳定性</a>
         <a href="#data">数据与审计</a>
         <a href="#production">生产化变化</a>
+        <a href="#runbook">演示讲法</a>
       </nav>
-    </div>
-  </header>
-
-  <main class="wrap">
+    </aside>
+    <div class="content">
     <section id="scope">
       <h2>1. 这个 PoC 做什么，不做什么</h2>
       <p>
@@ -279,7 +317,8 @@
         <div class="step"><b>3. 清单生成</b>根据案情从 YAML 规则映射出必需材料。</div>
         <div class="step"><b>4. 材料收集</b>客户用邮件发 PDF、DOCX、图片或文本附件。</div>
         <div class="step"><b>5. 质检补件</b>字段提取后跑代码 validator；失败材料要求重发。</div>
-        <div class="step"><b>6. 人工复核</b>通过材料进入 adviser panel，人工 approve 后发最终包。</div>
+        <div class="step"><b>6. 整案分析</b>围绕离境、资金、停留模式、担保关系生成有引用的问题。</div>
+        <div class="step"><b>7. 人工复核</b>通过材料进入 adviser panel，人工 approve 后发最终包。</div>
       </div>
       <h3>最终用户交付物</h3>
       <ul>
@@ -326,6 +365,11 @@
             <td>签证材料是否可用由代码判断，不由 LLM 判断。</td>
           </tr>
           <tr>
+            <td><code>src/case_analysis.py</code></td>
+            <td>构建整案事实上下文，生成/校验有证据引用的观察和追问。</td>
+            <td>把“顾问式整案关系分析”加入 demo，但仍禁止成功率、强弱评分和无引用判断。</td>
+          </tr>
+          <tr>
             <td><code>src/deliver.py</code></td>
             <td>生成内部 adviser review pack、QC、表格答案草稿、cover note draft。</td>
             <td>交付物要可复现；模型只允许提供受事实账本约束的 narrative。</td>
@@ -343,6 +387,7 @@
   -> Store(case state + traces)
   -> state.next_action()
   -> compose response / assemble review pack
+  -> whole-case analysis with evidence refs
   -> adviser panel
   -> final package to client</code></pre>
     </section>
@@ -350,8 +395,9 @@
     <section id="workflow-agent">
       <h2>4. 为什么不是纯 agent，也不是纯 workflow</h2>
       <p>
-        这个项目的核心取舍是：<strong>workflow 做主干，AI 做边缘能力</strong>。
-        换句话说，AI 负责理解和表达，workflow 负责判断和交付。
+        这个项目的核心取舍是：<strong>workflow 做主干，AI 做受约束的语义分析</strong>。
+        换句话说，workflow 负责流程、硬规则和交付边界；AI 负责理解真实输入、
+        抽取非结构化材料字段，以及在代码验证引用后提出整案观察。
       </p>
       <table>
         <thead>
@@ -379,6 +425,11 @@
             <td>姓名、日期、必填字段、跨文件一致性必须可复现。</td>
           </tr>
           <tr>
+            <td>整案分析</td>
+            <td>规则 facts + AI candidate + code guard</td>
+            <td>停留时长、资金与行程、英国亲属、国内联系等关系需要语义组合；但每条观察必须引用 case facts，不能输出结论。</td>
+          </tr>
+          <tr>
             <td>风险诊断</td>
             <td>规则 + 允许的问句</td>
             <td>可以提示风险因素和追问，但不能输出成功率或充分性结论。</td>
@@ -392,7 +443,7 @@
       </table>
       <div class="callout">
         判断标准很简单：输出空间有限、错误不可逆、需要审计的地方用 workflow；
-        输入混乱、表达需要自然语言、错误可被 schema/validator 拦住的地方用 AI。
+        输入混乱、跨材料语义组合、表达需要自然语言且能被引用校验拦住的地方用 AI。
       </div>
     </section>
 
@@ -442,6 +493,21 @@
             <td>事实账本扫描日期、金额、重要数字。</td>
             <td><code>src/facts.py</code> 的 <code>FactLedger</code></td>
           </tr>
+          <tr>
+            <td>整案分析变成“签证能不能过”的判断</td>
+            <td>只允许 Appendix V 相关 limb 的观察；禁止成功率、强弱评分、sufficiency 语言。</td>
+            <td><code>case_analysis.validate_observation()</code></td>
+          </tr>
+          <tr>
+            <td>LLM 提出无依据观察</td>
+            <td>每条 observation 必须带 <code>evidence_refs</code>，source 必须存在于 facts，上报 value 必须匹配。</td>
+            <td><code>case_analysis.build_fact_context()</code> + 引用校验</td>
+          </tr>
+          <tr>
+            <td>模型漫无边际挑刺</td>
+            <td>最多输出少量 adviser 值得追问的问题；默认 5 条以内。</td>
+            <td><code>case_analysis.analyse(..., limit=5)</code></td>
+          </tr>
         </tbody>
       </table>
       <p>
@@ -468,6 +534,7 @@
           <tr><td><code>ingress_events</code></td><td>LLM intake 候选、接受、拒绝、repair 和 validation errors。</td></tr>
           <tr><td><code>document_extraction_events</code></td><td>材料 OCR 文本、候选字段、接受字段、拒绝字段。</td></tr>
           <tr><td><code>validation_events</code></td><td>每条 validator 的 pass/fail 结果。</td></tr>
+          <tr><td><code>whole_case_analysis</code></td><td>当前在 review pack 中代码生成，不单独落表；生产环境应拆成可采纳/驳回/改写的 adviser workflow。</td></tr>
           <tr><td><code>adviser_reviews</code></td><td>人工顾问 approve 或要求 follow-up。</td></tr>
         </tbody>
       </table>
@@ -516,6 +583,10 @@
             <td>模型网关、超时预算、重试策略、敏感信息 redaction、成本监控、provider fallback。</td>
           </tr>
           <tr>
+            <td>整案分析层是薄版 PoC。</td>
+            <td>建立整案分析评测集、模型版本回归、提示注入防护、adviser 采纳/驳回闭环和责任归属。</td>
+          </tr>
+          <tr>
             <td>PDF report 用无依赖简版渲染。</td>
             <td>正式 PDF 模板、品牌样式、分页、附件索引、签名/版本号。</td>
           </tr>
@@ -539,7 +610,8 @@
         <li>展示材料清单来自规则配置，不是模型编的。</li>
         <li>上传一批附件，说明 OCR/LLM 只抽字段，validator 才判断通过/失败。</li>
         <li>展示失败材料补件、重复邮件去重、跨文件重检。</li>
-        <li>进入 admin panel，说明 human review gate。</li>
+        <li>展示整案分析：长停留、资金接近行程成本、英国定居亲属等观察都必须带 evidence refs。</li>
+        <li>进入 admin panel，说明 human review gate 和 adviser 对整案观察的最终责任。</li>
         <li>approve 后发 final package：PDF/HTML report + accepted 原文件。</li>
         <li>最后讲 production TODO：数据保护、权限、规则 freshness、模型可观测性、人工责任。</li>
       </ol>
@@ -548,10 +620,26 @@
         <code>docs/attachment-extraction.md</code> 和测试文件 <code>tests/test_poc.py</code>。
       </p>
     </section>
+    </div>
   </main>
 
   <footer class="wrap">
     UK Visa Agent PoC · Engineering explainer · Updated 2026-08-23
   </footer>
+  <script>
+    const links = Array.from(document.querySelectorAll('.toc a'));
+    const sections = links.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const activate = () => {
+      let current = sections[0];
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top <= 120) current = section;
+      }
+      links.forEach((link) => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current.id);
+      });
+    };
+    document.addEventListener('scroll', activate, { passive: true });
+    activate();
+  </script>
 </body>
 </html>

@@ -256,6 +256,14 @@ def main(argv=None):
     print("\n  -- form answers --")
     for row in pack["form_answers"]["rows"]:
         print("   %-38s %s" % (row["question"] + ":", row["answer"]))
+    print("\n  -- whole-case analysis --")
+    for item in pack["whole_case_analysis"]["observations"]:
+        print("   [%s] %s" % (
+            item["limb"], item["observation"]))
+        print("        question: %s" % item["question"])
+        print("        refs: %s" % ", ".join(
+            "%s=%s" % (ref["source"], ref["value"])
+            for ref in item["evidence_refs"]))
     delivered = em.sink[-1]
     review_pack = res["review_pack"]
     print("\n  -- customer email attachments actually sent --")

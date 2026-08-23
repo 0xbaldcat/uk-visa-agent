@@ -266,7 +266,8 @@ class Engine(object):
                 narrative[risk["id"]] = para
         try:
             pack = deliver.build_pack(
-                self.checklist, case, narrative=narrative, today=self.today)
+                self.checklist, case, narrative=narrative, today=self.today,
+                model=self.model)
         except facts.FabricationError as exc:
             case.stage = state.transition(case.stage, Stage.ESCALATED)
             case.escalation_reason = str(exc)

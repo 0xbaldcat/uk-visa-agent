@@ -23,6 +23,10 @@ language intake parsing. LLM output is treated as candidate structure: schema
 validation accepts valid fields, rejects invalid fields, and may perform one
 bounded repair attempt. The trace is recorded in `ingress_events`.
 
+The review pack also includes a whole-case analysis layer: code prepares a fact
+context, an optional model may propose evidence-backed observations, and code
+rejects observations with missing references or outcome/sufficiency claims.
+
 ## Documentation
 
 - [Engineering explainer](docs/engineering-explainer.html)

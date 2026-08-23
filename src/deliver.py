@@ -10,6 +10,7 @@ completeness statement becomes an opinion. Here it is a computation.
 from datetime import date
 from typing import Dict, Any, List, Optional
 
+import case_analysis
 import diagnose
 import facts
 
@@ -222,13 +223,14 @@ def qc_report(checklist, case, today=None):
     }
 
 
-def build_pack(checklist, case, narrative=None, today=None):
+def build_pack(checklist, case, narrative=None, today=None, model=None):
     """All four deliverables."""
     return {
         "document_checklist": document_checklist(checklist, case),
         "form_answers": form_answers(checklist, case),
         "cover_letter": cover_letter(checklist, case, narrative=narrative),
         "qc_report": qc_report(checklist, case, today=today),
+        "whole_case_analysis": case_analysis.analyse(checklist, case, model=model),
     }
 
 
@@ -259,6 +261,8 @@ def render_review_pack(pack):
         render_cover_letter(pack["cover_letter"]).strip(),
         "",
         render_qc_report(pack["qc_report"]).strip(),
+        "",
+        render_whole_case_analysis(pack["whole_case_analysis"]).strip(),
     ]
     return "\n".join(sections).rstrip() + "\n"
 
@@ -345,6 +349,33 @@ def render_qc_report(doc):
     lines.append("")
     lines.append("## Limits")
     for limit in doc["limits"]:
+        lines.append("- %s" % limit)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_whole_case_analysis(doc):
+    lines = ["# Whole-Case Analysis For Adviser Review", ""]
+    lines.append(
+        "These are evidence-backed observations and follow-up questions. They are "
+        "not outcome predictions or sufficiency decisions.")
+    observations = doc.get("observations") or []
+    if not observations:
+        lines.extend(["", "- No whole-case observations generated."])
+    for item in observations:
+        lines.extend(["", "## %s" % item["limb"].replace("_", " ").title()])
+        lines.append("- Observation: %s" % item["observation"])
+        if item.get("missing_context"):
+            lines.append("- Missing context: %s" % item["missing_context"])
+        lines.append("- Suggested question: %s" % item["question"])
+        lines.append("- Evidence refs:")
+        for ref in item.get("evidence_refs") or []:
+            lines.append("  - %s = %s" % (ref.get("source"), ref.get("value")))
+    if doc.get("rejected"):
+        lines.extend(["", "## Rejected Candidate Observations"])
+        for item in doc["rejected"]:
+            lines.append("- %s" % item.get("reason"))
+    lines.extend(["", "## Limits"])
+    for limit in doc.get("limits") or []:
         lines.append("- %s" % limit)
     return "\n".join(lines).rstrip() + "\n"
 
