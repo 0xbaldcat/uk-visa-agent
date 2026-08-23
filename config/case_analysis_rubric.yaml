@@ -1,0 +1,327 @@
+meta:
+  id: uk_standard_visitor_whole_case_v1
+  visa_type: UK Standard Visitor
+  version: 2026-08-23.1
+  status: poc_adviser_support
+  purpose: >-
+    Produce evidence-backed follow-up questions for a human adviser. This rubric
+    does not decide eligibility, predict an outcome, or assess evidence sufficiency.
+  time_basis: application_date
+  max_observations: 5
+
+sources:
+  appendix_v:
+    title: "Immigration Rules Appendix V: Visitor"
+    url: https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-v-visitor
+    sections: ["V 4.2", "V 4.3", "V 4.4 to V 4.6"]
+  caseworker_guidance:
+    title: "Visit caseworker guidance (accessible)"
+    url: https://www.gov.uk/government/publications/visit-guidance/visit-caseworker-guidance-accessible--2
+    effective_date: 2026-02-25
+    sections: ["6.1", "7.1 to 7.5", "8.1", "8.2", "9.2"]
+  supporting_documents:
+    title: "Visiting the UK - guide to supporting documents"
+    url: https://www.gov.uk/government/publications/visitor-visa-guide-to-supporting-documents/guide-to-supporting-documents-visiting-the-uk
+    effective_date: 2026-02-25
+    sections: ["2", "3"]
+  application_timing:
+    title: "Apply for a Standard Visitor visa"
+    url: https://www.gov.uk/standard-visitor/apply-standard-visitor-visa
+    rule: The earliest application date is 3 months before travel.
+
+global_rules:
+  - id: facts_only
+    requirement: >-
+      Every observation must cite exact facts present in the supplied fact ledger.
+      Do not infer an event, relationship, expense, deposit, commitment or document
+      merely because it would normally be relevant.
+  - id: distinguish_fact_gap_and_contradiction
+    requirement: >-
+      Label an issue as missing_context unless two supplied facts actually conflict.
+      Only call something inconsistent when both conflicting facts are cited.
+  - id: application_date_anchor
+    requirement: >-
+      Assess the evidence available at the application date. A document date may be
+      compared with the application date, but must not be judged by how close it is
+      to the future travel date.
+  - id: no_future_evidence
+    requirement: >-
+      Never ask for a document from a future month, a statement close to departure,
+      or evidence that cannot yet exist when the application is made.
+  - id: no_invented_thresholds
+    requirement: >-
+      Do not create a minimum bank balance, mandatory statement period, property
+      requirement, home-ties score, maximum visit-days-in-12-months rule, or other
+      threshold absent from the cited Visitor rules and guidance.
+  - id: no_outcome_or_sufficiency
+    requirement: >-
+      Do not predict approval or refusal, score the case, or say that an applicant,
+      document or fact is sufficient, insufficient, strong, weak, credible or not
+      credible. Surface a fact relationship and an answerable follow-up question.
+  - id: no_single_factor_verdict
+    requirement: >-
+      Do not treat a first trip, a long planned stay, a UK relative, a low balance,
+      a property document, or previous compliant travel as determinative on its own.
+  - id: question_must_be_answerable_now
+    requirement: >-
+      Ask for an explanation or evidence that already exists or is available at the
+      application date. Ask one focused question and state the missing context.
+  - id: prioritise_material_questions
+    requirement: >-
+      Return at most five non-duplicative observations that materially help a human
+      adviser understand the genuine-visitor requirements. Omit generic advice.
+
+allowed_question_actions:
+  - clarify a fact already declared in the application or supplied documents
+  - explain the origin of a transaction already visible in a supplied statement
+  - identify who will pay a stated trip, accommodation or maintenance cost
+  - describe an existing work, business, study, family or financial arrangement
+  - provide the most recent evidence already available at the application date
+  - reconcile two cited facts that genuinely conflict
+
+prohibited_question_actions:
+  - ask for a future-dated bank statement or an update close to the travel date
+  - require six months of statements or a statement dated within 31 days as a Visitor rule
+  - require a particular minimum balance or funds-to-trip-cost ratio
+  - require property ownership or a fixed number of home-country ties
+  - ask the applicant to guarantee that they will leave the UK
+  - ask for evidence unrelated to a cited fact gap or contradiction
+  - imply that one document or answer will guarantee a visa outcome
+
+dimensions:
+  - id: purpose_duration_and_activities
+    label: Purpose, duration and permitted activities
+    legal_limbs: [permitted_purpose, not_live_in_uk]
+    source_refs:
+      - appendix_v:V_4_2_b_to_d
+      - caseworker_guidance:7_1
+      - caseworker_guidance:7_2
+      - caseworker_guidance:9_2
+    review_objective: >-
+      Check that the stated main reason, planned activities, length of stay,
+      accommodation, budget and work or business arrangements form one coherent
+      description of a temporary permitted visit.
+    compare_facts:
+      - declared main purpose and detailed activities
+      - intended arrival, departure and trip length
+      - itinerary and accommodation dates and addresses
+      - estimated trip cost and payer
+      - overseas work, business or study arrangements during the visit
+      - any activity that may amount to prohibited work or another prohibited activity
+    observation_triggers:
+      - the main purpose or planned activities are not described
+      - cited purpose, itinerary, accommodation or duration facts conflict
+      - the duration is not explained by the cited activities and arrangements
+      - a cited planned activity may fall outside permitted visitor activities
+    safe_observation_pattern: >-
+      State which cited parts of the visit plan do not yet connect or conflict. Do
+      not say that the duration itself is too long or that the purpose is not genuine.
+    safe_question_pattern: >-
+      Ask the applicant to explain the existing visit plan, why the stated duration
+      is needed, and how current work, business or study responsibilities will be
+      handled during that period.
+    prohibited_inferences:
+      - a long visit is automatically non-genuine
+      - any visit below six months is automatically acceptable
+      - a family visit permits work, regular childcare or provision of services
+
+  - id: financial_resources_and_trip_cost
+    label: Financial resources and reasonable trip costs
+    legal_limbs: [funds]
+    source_refs:
+      - appendix_v:V_4_2_e
+      - caseworker_guidance:6_1_financial_correlation
+      - caseworker_guidance:8_1
+      - supporting_documents:2_financial_documents
+      - application_timing:three_month_application_window
+    review_objective: >-
+      Compare funds the applicant actually relies on at application, access to those
+      funds, likely trip costs, continuing revenue and ongoing commitments. Where
+      existing funds are recent, check whether their origin is evidenced.
+    compare_facts:
+      - application date and latest statement already available on that date
+      - account holder, accessible balance and declared source of funds
+      - declared income and revenue continuing during the visit
+      - estimated travel, maintenance, accommodation and dependant costs
+      - rent, mortgage, dependants and other ongoing financial commitments
+      - deposits already visible in the supplied statement and any declared explanation
+      - third-party support already declared on the application
+    observation_triggers:
+      - declared income, support or source of funds conflicts with cited financial evidence
+      - likely trip costs or ongoing commitments are missing from the facts needed for comparison
+      - a cited deposit relied upon for the trip has no supplied origin
+      - the supplied statement is not the latest evidence available at the application date
+    safe_observation_pattern: >-
+      Describe the cited amounts and the specific missing comparison or unexplained
+      existing transaction. Do not invent a required surplus or minimum balance.
+    safe_question_pattern: >-
+      Ask whether the supplied statement is the latest one already available when
+      applying, and ask for the source of a specific existing deposit or for current
+      income and commitment information needed to understand the stated budget.
+    prohibited_inferences:
+      - there is a fixed minimum balance for a Visitor
+      - six months of statements are mandatory
+      - a statement must be dated within 31 days under the Visitor rules
+      - evidence should be produced in a future month or near departure
+      - a balance-to-trip-cost ratio determines the outcome
+
+  - id: sponsor_relationship_and_support
+    label: Sponsor relationship, scope and ability to support
+    legal_limbs: [sponsor_consistency, funds]
+    source_refs:
+      - appendix_v:V_4_3
+      - caseworker_guidance:8_2
+      - caseworker_guidance:7_5_applicant_sponsor_discrepancies
+      - supporting_documents:3
+    review_objective: >-
+      Check that the applicant and sponsor describe the same relationship and support,
+      that the sponsor can and will provide the declared support for the intended stay,
+      and that a UK sponsor's lawful status is evidenced where applicable.
+    compare_facts:
+      - relationship and how the parties know and communicate with each other
+      - support type, amount, duration and who pays each major cost
+      - sponsor identity and UK status where applicable
+      - accommodation provider, address and dates
+      - sponsor funds, own commitments and people normally dependent on the sponsor
+      - applicant form, invitation, accommodation and sponsor evidence
+    observation_triggers:
+      - applicant and sponsor statements conflict on a fact the sponsor should know
+      - the scope or method of support is not stated
+      - relationship or UK status evidence is missing where relied upon
+      - facts needed to understand the sponsor's ability to support all dependants are missing
+    safe_observation_pattern: >-
+      Cite the exact discrepancy or missing support detail. Do not infer that a family
+      relationship is false or that support is unaffordable without the relevant facts.
+    safe_question_pattern: >-
+      Ask the applicant or sponsor to reconcile the cited difference or describe the
+      current support arrangement, including who pays which costs and for how long.
+    prohibited_inferences:
+      - an invitation letter alone guarantees support
+      - a UK relative is automatically a negative factor
+      - sponsor ability can be decided without their own commitments and dependants
+
+  - id: personal_circumstances_and_will_leave
+    label: Personal circumstances and intention to leave
+    legal_limbs: [will_leave]
+    source_refs:
+      - appendix_v:V_4_2_a
+      - caseworker_guidance:7_2
+      - caseworker_guidance:7_5
+      - supporting_documents:2_personal_circumstances
+    review_objective: >-
+      Consider whether the stated reason for the visit corresponds with the applicant's
+      personal, family, social and economic background and what ongoing commitments
+      exist in the country of residence.
+    compare_facts:
+      - current employment, self-employment, study or retirement circumstances
+      - ongoing role, approved absence and expected return arrangements
+      - family or dependants remaining in the country of residence
+      - continuing business, tax, study, housing or other long-term commitments
+      - family and economic connections in the UK and in the country of residence
+      - visit purpose, duration and the applicant's wider profile
+    observation_triggers:
+      - a declared ongoing commitment lacks the facts needed to understand how it continues
+      - cited work, business, study or family arrangements conflict with the trip dates
+      - most cited family or economic connections are in the UK and home-country context is absent
+    safe_observation_pattern: >-
+      Identify the specific commitment or profile relationship that needs context.
+      Treat UK family and home-country circumstances as factors to consider together,
+      not as a score or checklist.
+    safe_question_pattern: >-
+      Ask how a cited existing commitment continues during the planned trip and what
+      currently available evidence records that arrangement.
+    prohibited_inferences:
+      - property ownership is required
+      - a fixed number of home-country ties proves intention to leave
+      - having settled relatives in the UK means the applicant will not leave
+      - lack of one common document means no meaningful ties exist
+
+  - id: travel_and_immigration_pattern
+    label: Travel and immigration pattern
+    legal_limbs: [travel_history, not_live_in_uk, will_leave]
+    source_refs:
+      - appendix_v:V_4_2_a_and_b
+      - caseworker_guidance:7_3
+      - caseworker_guidance:7_4
+    review_objective: >-
+      Review previous immigration compliance and the pattern of UK visits, especially
+      the number and duration of visits in the last 12 months, time between visits,
+      and whether actual stays differed from what was previously stated.
+    compare_facts:
+      - previous UK and other-country travel and immigration outcomes
+      - intended versus actual duration of previous visits where available
+      - UK visits in the previous 12 months, their duration and gaps between them
+      - time spent in the UK compared with the country of residence
+      - reasons for return trips and long-term commitments outside the UK
+      - current visit purpose and duration
+    observation_triggers:
+      - a previous actual stay was materially longer than the cited intended stay
+      - the 12-month UK travel pattern needs context to understand whether visits are successive
+      - a cited immigration breach, removal or refusal lacks circumstances
+      - travel-history facts conflict between passport, application and intake
+    safe_observation_pattern: >-
+      Describe the cited pattern or discrepancy without treating it as a verdict.
+      Previous compliant travel may be relevant but is never the only consideration.
+    safe_question_pattern: >-
+      Ask for the purpose and duration of specific existing trips or for an explanation
+      of a cited discrepancy in the current travel record.
+    prohibited_inferences:
+      - there is a six-months-in-twelve-months rule
+      - a first-time traveller is automatically adverse
+      - previous compliant travel proves the current visit is genuine
+      - a previous refusal alone determines the present case
+
+  - id: cross_record_credibility_and_consistency
+    label: Cross-record credibility and consistency
+    legal_limbs: [permitted_purpose, funds, sponsor_consistency, will_leave]
+    source_refs:
+      - caseworker_guidance:6_1_all_information
+      - caseworker_guidance:6_1_financial_correlation
+      - caseworker_guidance:7_5
+    review_objective: >-
+      Compare declarations and evidence on facts central to purpose, funding,
+      accommodation, relationship and personal circumstances. Distinguish an actual
+      contradiction from information that is simply absent.
+    compare_facts:
+      - application form and intake answers
+      - applicant and sponsor statements
+      - itinerary, invitation and accommodation facts
+      - declared income, deposits, support and financial documents
+      - employment or business facts across letters, registrations and financial records
+    observation_triggers:
+      - two supplied facts conflict on the same material point
+      - a declared fact expected to be substantiated is absent from the cited evidence
+      - information could not be verified after a recorded verification attempt
+    safe_observation_pattern: >-
+      Quote both sides of a genuine conflict, or identify the exact declared fact for
+      which context is missing. Never upgrade absence into deception.
+    safe_question_pattern: >-
+      Ask which of the two cited facts is current and request an explanation or
+      correction using evidence already available at the application date.
+    prohibited_inferences:
+      - missing information is false information
+      - a spelling or formatting difference is a substantive contradiction
+      - inability to verify automatically proves deception
+
+output_contract:
+  required_fields:
+    - dimension_id
+    - limb
+    - observation_type
+    - observation
+    - evidence_refs
+    - missing_context
+    - question
+    - source_refs
+  allowed_observation_types:
+    - contradiction
+    - missing_context
+    - origin_of_funds
+    - purpose_duration_alignment
+    - travel_pattern_context
+    - sponsor_support_context
+  evidence_ref_contract:
+    source: must exactly match a fact-ledger key
+    value: must exactly match that fact-ledger value
+  source_ref_contract: must reference at least one source_refs entry from the selected dimension
+  question_contract: must satisfy global_rules and prohibited_question_actions
