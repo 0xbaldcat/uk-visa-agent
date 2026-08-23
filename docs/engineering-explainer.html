@@ -328,6 +328,7 @@
         <a href="#scope">产品定位</a>
         <a href="#workflow">Workflow 流程图</a>
         <a href="#architecture">产品架构图</a>
+        <a href="#admin">顾问工作台</a>
         <a href="#hybrid">Agent / Workflow</a>
         <a href="#stability">AI 交付稳定性</a>
         <a href="#production">生产化与扩展</a>
@@ -413,16 +414,16 @@
             </div>
             <div class="workflow-step human">
               <span class="number">7</span>
-              <strong>人工顾问复核</strong>
-              <p>顾问查看通过材料、失败原因与整案观察，决定通过或继续追问。</p>
+              <strong>转交人工顾问</strong>
+              <p>顾问查看材料、失败原因和整案观察；从此接管客户沟通，不再自动重跑整案 LLM。</p>
             </div>
             <div class="workflow-step">
               <span class="number">8</span>
-              <strong>交付最终材料包</strong>
-              <p>向客户发送最终报告和所有已通过的原始文件，失败文件不会混入。</p>
+              <strong>人工选材并交付</strong>
+              <p>顾问勾选最终文件、排除旧版或不合适材料，生成可追溯的材料包与报告。</p>
             </div>
           </div>
-          <div class="feedback">任何材料未通过，都会回到客户补件；补件后重新检查整案，而不是只看最后一个文件</div>
+          <div class="feedback">自动阶段负责收集、校验和一次整案分析；进入人工复核后，后续问什么、收什么、最终交什么都由顾问决定</div>
         </div>
       </section>
 
@@ -456,14 +457,14 @@
               <p>选择签证与场景规则包<br>生成个性化材料清单<br>校验单份材料<br>检查跨材料一致性<br>拦截无依据的 AI 输出</p>
             </div>
             <div class="arch-box human">
-              <strong>人工复核层</strong>
-              <p>查看证据与追踪记录<br>采纳或驳回整案观察<br>决定继续补件或最终交付</p>
+              <strong>顾问 Admin Panel</strong>
+              <p>查看证据与整案观察<br>与客户双向沟通并收件<br>管理材料版本<br>选择最终交付文件</p>
             </div>
           </div>
           <div class="arch-arrow">↓</div>
           <div class="arch-box">
             <strong>交付与追溯</strong>
-            <p>最终报告 + 已通过原始材料｜案件状态｜处理轨迹｜规则版本｜AI 候选与拦截原因</p>
+            <p>最终报告 + 顾问选定原始材料｜文件版本｜选择与排除原因｜案件轨迹｜规则版本｜AI 候选与拦截原因</p>
           </div>
           <div class="guard-bar">所有关键动作都经过事实账本、结构化输出和审计记录；模型不能直接改写案件结论</div>
         </div>
@@ -472,8 +473,61 @@
         </div>
       </section>
 
+      <section id="admin">
+        <p class="section-kicker">04 · Adviser workspace</p>
+        <h2>Admin Panel：不是“审批按钮”，而是顾问接管后的工作台</h2>
+        <p>
+          整案 LLM 的输出只给人类顾问看，不直接变成客户邮件。案件一旦进入人工复核，自动分析阶段结束；
+          顾问判断哪些问题真正重要、是否需要追问、是否需要补充材料，并一直处理到最终组包。
+        </p>
+        <div class="grid-4">
+          <div class="card">
+            <span class="label">判断依据</span>
+            <strong>风险与证据同屏</strong>
+            查看 LLM 候选问题、触发原因、原始事实引用和规则来源；顾问可以采纳、改写或忽略。
+          </div>
+          <div class="card">
+            <span class="label">客户沟通</span>
+            <strong>顾问亲自留言</strong>
+            顾问编辑并发送邮件，在案件时间线里查看客户回复、文字说明和新附件。
+          </div>
+          <div class="card">
+            <span class="label">文件治理</span>
+            <strong>保留新旧版本</strong>
+            后续附件继续保存和解析，但不触发整案 LLM；被替代的旧文件保留并标记，不静默覆盖。
+          </div>
+          <div class="card">
+            <span class="label">最终组包</span>
+            <strong>人工勾选与反选</strong>
+            默认勾选校验通过且未被替代的文件；顾问可取消默认项，也可加入沟通过程中的新文件。
+          </div>
+        </div>
+        <div class="split">
+          <div class="lane workflow">
+            <h3>机器校验决定默认值</h3>
+            <ul>
+              <li><code>validation_passed</code>：文件是否通过 checklist 规则</li>
+              <li>通过且仍为有效版本的文件默认进入待打包选择</li>
+              <li>解析和基本文件安全处理仍可继续辅助顾问</li>
+            </ul>
+          </div>
+          <div class="lane agent">
+            <h3>人类顾问决定最终结果</h3>
+            <ul>
+              <li><code>included_in_final_pack</code>：文件最终是否交付</li>
+              <li>顾问可以推翻机器默认选择，并写明替换或排除原因</li>
+              <li>打包时冻结文件版本、选择人、时间和理由，形成不可变快照</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout amber">
+          <strong>关键控制权转移：</strong>进入人工复核不是“让人点一下批准后继续自动跑”，而是一次明确的控制权交接。
+          后续客户沟通、补充材料判断和最终材料选择均由顾问负责。
+        </div>
+      </section>
+
       <section id="hybrid">
-        <p class="section-kicker">04 · Agent vs workflow</p>
+        <p class="section-kicker">05 · Agent vs workflow</p>
         <h2>为什么不是纯 Agent，也不是纯 Workflow</h2>
         <div class="split">
           <div class="lane agent">
@@ -482,7 +536,7 @@
               <li>理解客户不完整、乱序的自然语言</li>
               <li>从 PDF、Word 和图片中提取候选事实</li>
               <li>跨材料发现值得顾问追问的关系</li>
-              <li>把固定要求表达成自然、个性化的回复</li>
+              <li>在自动收集阶段把固定要求表达成自然、个性化的回复</li>
             </ul>
           </div>
           <div class="lane workflow">
@@ -491,7 +545,7 @@
               <li>决定案件处于哪个阶段、下一步做什么</li>
               <li>根据规则包生成材料清单</li>
               <li>判断必填字段和一致性检查是否通过</li>
-              <li>控制哪些文件可以进入最终交付包</li>
+              <li>进入人工复核后停止自动整案分析</li>
             </ul>
           </div>
         </div>
@@ -499,31 +553,32 @@
           判断原则：输入开放、语义复杂、允许被校验 → AI；输出有限、错误代价高、必须可复现 → Workflow
         </div>
         <div class="callout">
-          <strong>人仍在回路中：</strong>AI 可以提出观察，规则可以拦截明显问题，但“这套材料是否可以最终交付”仍由人工顾问确认。
+          <strong>人不是最后才出现：</strong>AI 只生成一次候选观察，规则拦截明显问题；进入人工复核后由顾问持续沟通并选择最终材料，
+          不把控制权再交回 LLM。
         </div>
       </section>
 
       <section id="stability">
-        <p class="section-kicker">05 · Reliable AI delivery</p>
+        <p class="section-kicker">06 · Reliable AI delivery</p>
         <h2>AI 交付稳定性：靠控制面，而不是只靠提示词</h2>
         <p class="muted">我们假设模型可能超时、误读、格式错误或引用不准，因此把失败变成显式状态，而不是让它悄悄进入交付物。</p>
         <div class="controls">
           <div class="control"><span class="icon">01</span><div><strong>结构化输出</strong><p>AI 只提交候选字段或候选观察；格式不合格就拒绝，不直接写入最终结论。</p></div></div>
           <div class="control"><span class="icon">02</span><div><strong>事实引用</strong><p>整案观察必须标明依据；引用来源不存在或取值不一致，就不会进入人工复核包。</p></div></div>
-          <div class="control"><span class="icon">03</span><div><strong>规则放行</strong><p>材料要求、阻塞问题和最终组包由确定性规则控制，模型不能临场增加或删除要求。</p></div></div>
+          <div class="control"><span class="icon">03</span><div><strong>规则给出默认值</strong><p>材料要求和机器校验由确定性规则控制；最终组包由顾问在这些默认值上勾选或反选。</p></div></div>
           <div class="control"><span class="icon">04</span><div><strong>失败关闭</strong><p>附件无法读取、检查器未知或事实不确定时要求补件；系统不会“猜一个答案继续”。</p></div></div>
           <div class="control"><span class="icon">05</span><div><strong>全链路追溯</strong><p>保存原始输入、抽取结果、校验结果、拒绝原因、人工动作和最终交付版本。</p></div></div>
-          <div class="control"><span class="icon">06</span><div><strong>人工最终关口</strong><p>顾问可以采纳、驳回或改写观察，并决定继续追问还是批准最终材料包。</p></div></div>
+          <div class="control"><span class="icon">06</span><div><strong>一次性交接</strong><p>整案观察交给顾问后不再自动重跑；顾问负责后续沟通、补充材料判断和最终选材。</p></div></div>
         </div>
         <div class="proof">
           <strong>真实 LLM 测试证明护栏在工作：</strong>
-          模型生成 5 条整案候选观察，其中 4 条通过；1 条因为引用值与事实账本不一致被规则拦截，
-          没有进入顾问复核结果。这里展示的不是“模型永远正确”，而是“模型出错时系统能抓住”。
+          当前真实测试生成 5 条有事实引用的顾问问题并全部通过；此前模型曾自行加入官方规则没有的“过去十年”时间范围，
+          现已由通用时间窗口校验拦截。这里展示的不是“模型永远正确”，而是“模型出错时系统能抓住”。
         </div>
       </section>
 
       <section id="production">
-        <p class="section-kicker">06 · Production & extensibility</p>
+        <p class="section-kicker">07 · Production & extensibility</p>
         <h2>从 PoC 到生产：核心结构保留，治理能力补齐</h2>
         <div class="evolution">
           <div class="evolution-panel">
@@ -532,7 +587,7 @@
               <li>覆盖 UK Standard Visitor</li>
               <li>完整演示探亲 reference scenario</li>
               <li>Email 真实附件闭环</li>
-              <li>本地人工复核后台</li>
+              <li>本地顾问 Admin Panel</li>
               <li>真实 LLM 整案分析路径</li>
             </ul>
           </div>
@@ -544,7 +599,7 @@
               <li>加密存储、病毒扫描、权限与数据保留策略</li>
               <li>规则来源监控、审批、版本锁定与回滚</li>
               <li>模型评测、成本监控、降级和供应商切换</li>
-              <li>顾问分案、复核记录和质量反馈闭环</li>
+              <li>顾问分案、权限、服务时限与质量反馈闭环</li>
             </ul>
           </div>
         </div>
@@ -563,12 +618,12 @@
       </section>
 
       <section id="demo">
-        <p class="section-kicker">07 · Interview story</p>
+        <p class="section-kicker">08 · Interview story</p>
         <h2>面试时最值得展示的五个亮点</h2>
         <div class="highlights">
           <div class="highlight"><strong>不是聊天机器人，而是可完成交付的 Agent。</strong>从第一封邮件一直推进到最终报告和材料包。</div>
           <div class="highlight"><strong>使用真实材料形态。</strong>客户发送 PDF、Word 和图片，系统通过解析与 OCR 处理，不依赖预先整理好的 JSON。</div>
-          <div class="highlight"><strong>AI 与 Workflow 有清晰分工。</strong>AI 解决输入复杂性，规则引擎控制高代价决策和最终放行。</div>
+          <div class="highlight"><strong>AI、Workflow 与人类顾问有清晰交接。</strong>AI 解决输入复杂性，规则约束自动阶段，顾问接管高代价判断和最终选材。</div>
           <div class="highlight"><strong>能证明 AI 失败不会直接污染交付。</strong>引用不一致的真实模型输出被规则拦截，并保留原因供审计。</div>
           <div class="highlight"><strong>PoC 不是一次性脚本。</strong>签证公共规则、访问目的和客户画像可以组合，未来扩场景不需要推倒核心流程。</div>
         </div>
