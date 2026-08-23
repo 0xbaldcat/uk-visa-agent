@@ -337,21 +337,32 @@ def _document_messages(text, wanted_fields):
 def _case_analysis_messages(context):
     facts = context.get("facts") or {}
     allowed_limbs = context.get("allowed_limbs") or []
+    dimensions = context.get("analysis_dimensions") or []
+    fact_list = [{"source": key, "value": value} for key, value in sorted(facts.items())]
     return [
         {"role": "system", "content": (
             "You are preparing UK visitor visa whole-case review notes for a human adviser. "
+            "Use the supplied analysis_dimensions as the review rubric; do not add unrelated "
+            "dimensions. "
             "Return only a JSON object with an observations array. Each observation must have "
-            "limb, observation, evidence_refs, missing_context, and question. "
-            "Use only facts supplied by the user message. Each evidence_ref must copy an exact "
-            "source and value from the supplied facts. Do not invent facts. Do not predict an "
+            "dimension_id, limb, observation, evidence_refs, missing_context, and question. "
+            "Use only facts supplied by the user message. Each evidence_ref must copy source "
+            "and value exactly from fact_list. Do not shorten, rename, translate, or infer fact "
+            "sources. For example, use intake.trip_length_days, not trip_length_days. "
+            "For bank evidence, ask for the latest available/current statement at application "
+            "time or an explanation of deposits; do not ask for future-month statements or "
+            "statements close to the travel date. "
+            "Do not invent facts. Do not predict an "
             "outcome, score the case, or say whether the evidence is sufficient or insufficient. "
             "Prefer at most five concise observations that would help an adviser ask follow-up "
             "questions.")},
         {"role": "user", "content": json.dumps({
             "allowed_limbs": list(allowed_limbs),
-            "facts": facts,
+            "analysis_dimensions": dimensions,
+            "fact_list": fact_list,
             "output_schema": {
                 "observations": [{
+                    "dimension_id": "one of analysis_dimensions[].id",
                     "limb": "one of allowed_limbs",
                     "observation": "evidence-backed adviser review note",
                     "evidence_refs": [{"source": "fact key", "value": "exact fact value"}],

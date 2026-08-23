@@ -137,7 +137,11 @@ class CaseAnalysisModel(llm.StubModel):
         self.observations = observations
 
     def analyse_case(self, context):
-        self.calls.append(("analyse_case", sorted(context["facts"].keys())))
+        self.calls.append((
+            "analyse_case",
+            sorted(context["facts"].keys()),
+            [item["id"] for item in context.get("analysis_dimensions", [])],
+        ))
         return list(self.observations)
 
 
@@ -1016,6 +1020,10 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertEqual(len(analysis["rejected"]), 2)
         self.assertEqual(model.calls[0][0], "analyse_case")
         self.assertEqual(analysis["candidate_source"], "model")
+        self.assertEqual(model.calls[0][2], [
+            "funds_and_trip", "stay_length", "home_country_ties",
+            "sponsor_consistency", "travel_pattern",
+        ])
 
     def test_email_model_delegates_whole_case_analysis_to_client(self):
         cl = load()
@@ -1037,6 +1045,7 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertEqual(len(analysis["observations"]), 1)
         self.assertEqual(analysis["observations"][0]["limb"], "funds")
         self.assertEqual(client.calls[0][0], "analyse_case")
+        self.assertIn("analysis_dimensions", analysis)
 
     def test_chat_case_analysis_client_reads_observations_array(self):
         client = email_model.ChatCompletionsCaseAnalysisClient(
@@ -1054,6 +1063,13 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         got = client.analyse_case({
             "facts": {"bank_statements.closing_balance": "5100.00"},
             "allowed_limbs": ["funds"],
+            "analysis_dimensions": [{
+                "id": "funds_and_trip",
+                "label": "Funds and trip cost",
+                "limbs": ["funds"],
+                "source_ids": ["appendix_v"],
+                "instruction": "Check funds against trip cost.",
+            }],
         })
 
         self.assertEqual(got[0]["limb"], "funds")

@@ -95,6 +95,7 @@ def main():
         "provider": getattr(model.case_analysis_client, "base_url", None),
         "model": getattr(model.case_analysis_client, "model_name", None),
         "accepted_count": len(analysis["observations"]),
+        "analysis_dimensions": analysis["analysis_dimensions"],
         "candidate_source": analysis["candidate_source"],
         "model_error": analysis["model_error"],
         "rejected_count": len(analysis["rejected"]),

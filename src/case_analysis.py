@@ -18,6 +18,62 @@ ALLOWED_LIMBS = {
     "travel_history",
 }
 
+ANALYSIS_DIMENSIONS = [
+    {
+        "id": "funds_and_trip",
+        "label": "Funds and trip cost",
+        "limbs": ["funds"],
+        "source_ids": ["appendix_v", "caseworker_guidance"],
+        "instruction": (
+            "Check whether latest available bank statements at application time, "
+            "estimated trip cost, income, fixed costs, and large or recent deposits "
+            "need explanation. Do not ask for statements from future months or near "
+            "the travel date."
+        ),
+    },
+    {
+        "id": "stay_length",
+        "label": "Stay length",
+        "limbs": ["not_live_in_uk", "will_leave"],
+        "source_ids": ["appendix_v", "caseworker_guidance"],
+        "instruction": (
+            "Check whether a long visit is coordinated with work, business, "
+            "accommodation and budget evidence."
+        ),
+    },
+    {
+        "id": "home_country_ties",
+        "label": "Home-country ties",
+        "limbs": ["will_leave"],
+        "source_ids": ["appendix_v", "caseworker_guidance"],
+        "instruction": (
+            "Where there is a settled UK relative, check whether home-country "
+            "work, business, property, family or study evidence answers the "
+            "will-leave concern."
+        ),
+    },
+    {
+        "id": "sponsor_consistency",
+        "label": "Sponsor consistency",
+        "limbs": ["sponsor_consistency", "funds"],
+        "source_ids": ["caseworker_guidance", "supporting_docs"],
+        "instruction": (
+            "Check whether invitation, sponsor status, accommodation, funding "
+            "and relationship facts are consistent."
+        ),
+    },
+    {
+        "id": "travel_pattern",
+        "label": "Travel pattern",
+        "limbs": ["travel_history", "not_live_in_uk"],
+        "source_ids": ["caseworker_guidance"],
+        "instruction": (
+            "Check whether prior compliant travel, previous stays and the current "
+            "planned stay need extra explanation."
+        ),
+    },
+]
+
 FORBIDDEN_TERMS = (
     "approved",
     "refused",
@@ -64,6 +120,7 @@ def analyse(checklist, case, model=None, limit=5):
             model_candidates = model.analyse_case({
                 "facts": facts,
                 "allowed_limbs": sorted(ALLOWED_LIMBS),
+                "analysis_dimensions": ANALYSIS_DIMENSIONS,
             }) or []
             if model_candidates:
                 candidates = model_candidates
@@ -94,6 +151,7 @@ def analyse(checklist, case, model=None, limit=5):
         ],
         "candidate_source": candidate_source,
         "model_error": model_error,
+        "analysis_dimensions": ANALYSIS_DIMENSIONS,
     }
 
 
