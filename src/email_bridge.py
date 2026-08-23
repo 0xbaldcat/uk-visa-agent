@@ -146,6 +146,10 @@ class EmailPoller(object):
             return []
 
         self._set_thread_context(case_id, parsed)
+        case = self.store.get_case(case_id)
+        if case and case.stage == state.Stage.HUMAN_REVIEW:
+            return self._record_human_review_email(case_id, parsed)
+
         refs = list(parsed.references)
         if parsed.message_id not in refs:
             refs.append(parsed.message_id)
@@ -189,6 +193,24 @@ class EmailPoller(object):
                 if hasattr(self.store, "remember_email_message"):
                     self.store.remember_email_message(sent["message_id"], case_id)
         return results
+
+    def _record_human_review_email(self, case_id, parsed):
+        if not self.store.record_inbound(parsed.message_id, case_id, "email", parsed.body):
+            return []
+        message_id = None
+        if (parsed.body or parsed.attachments) and hasattr(self.store, "record_human_review_message"):
+            message_id = self.store.record_human_review_message(
+                case_id, raw_message_id=parsed.message_id,
+                from_addr=parsed.from_addr, body=parsed.body)
+        for index, attachment in enumerate(parsed.attachments):
+            document_ref = self._document_ref(case_id, parsed, attachment, index)
+            if hasattr(self.store, "record_human_review_file"):
+                self.store.record_human_review_file(
+                    case_id, attachment.filename, document_ref,
+                    message_id=message_id, raw_message_id=parsed.message_id,
+                    from_addr=parsed.from_addr, content_type=attachment.content_type,
+                    evidence_id=attachment.evidence_id)
+        return []
 
     def resolve_case(self, parsed):
         if parsed.case_id:

@@ -1206,6 +1206,13 @@ class TestAdminPanel(unittest.TestCase):
         st, case = make_case(evidence=COMPLETE_EVIDENCE)
         case.stage = state.Stage.HUMAN_REVIEW
         st.save_case(case)
+        st.record_human_review_message(
+            "t1", raw_message_id="<client-review@example.test>",
+            from_addr="client@example.test", body="Here is the replacement file.")
+        st.record_human_review_file(
+            "t1", "replacement-bank.pdf", "/tmp/replacement-bank.pdf",
+            raw_message_id="<client-review@example.test>",
+            from_addr="client@example.test", evidence_id="bank_statements")
 
         html_body = admin_panel.render_app(st, cl, {"case": ["t1"]})
 
@@ -1217,6 +1224,12 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Needs client follow-up", html_body)
         self.assertIn("Needs review", html_body)
         self.assertIn("not reviewed", html_body)
+        self.assertIn("Final Package Selection", html_body)
+        self.assertIn('value="accepted:passport" checked', html_body)
+        self.assertIn('value="review_file:1"', html_body)
+        self.assertIn("Human Review Client Replies", html_body)
+        self.assertIn("Here is the replacement file.", html_body)
+        self.assertIn("replacement-bank.pdf", html_body)
 
     def test_admin_panel_shows_saved_decision_feedback(self):
         cl = load()
@@ -1287,7 +1300,23 @@ class TestAdminPanel(unittest.TestCase):
         self.assertGreater(review_id, 0)
         self.assertEqual(latest["decision"], "needs_client_follow_up")
         self.assertEqual(latest["note"], "Ask for cleaner bank statements")
+        self.assertEqual(latest["package_selection"], "[]")
         self.assertIn("adviser_review_recorded", audit_kinds)
+
+    def test_adviser_review_persists_final_package_selection(self):
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+
+        review_id = st.record_adviser_review(
+            "t1", "approved_for_final_report", reviewer="test",
+            package_selection=["accepted:passport", "review_file:3"])
+        latest = st.latest_adviser_review("t1")
+
+        self.assertGreater(review_id, 0)
+        self.assertEqual(
+            json.loads(latest["package_selection"]),
+            ["accepted:passport", "review_file:3"])
 
     def test_adviser_notification_is_persisted(self):
         st, case = make_case(evidence=COMPLETE_EVIDENCE)
@@ -1327,6 +1356,13 @@ class TestAdminPanel(unittest.TestCase):
                 },
             }
             _, case = make_case(evidence=evidence)
+            replacement_path = os.path.join(td, "replacement-bank.pdf")
+            with open(replacement_path, "wb") as fh:
+                fh.write(b"REPLACEMENT")
+            st = store_mod.Store()
+            file_id = st.record_human_review_file(
+                case.id, "replacement-bank.pdf", replacement_path,
+                evidence_id="bank_statements")
 
             subject, body, attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.")
@@ -1346,6 +1382,20 @@ class TestAdminPanel(unittest.TestCase):
             self.assertEqual(passport["content"], b"PASSPORT")
             self.assertNotIn("visa-final-review-report.md", filenames)
             self.assertNotIn("bank-fail.pdf", filenames)
+
+            selected_subject, _, selected_attachments = admin_panel.customer_notification(
+                cl, case, "approved_for_final_report", "Reviewed by Alex.",
+                selected_tokens=["review_file:%s" % file_id], st=st)
+            selected_filenames = [a["filename"] for a in selected_attachments]
+            selected_html = next(a for a in selected_attachments
+                                 if a["filename"] == "visa-final-review-report.html")
+            replacement = next(a for a in selected_attachments
+                               if a["filename"] == "replacement-bank.pdf")
+            self.assertIn("Adviser review complete", selected_subject)
+            self.assertIn("replacement-bank.pdf", selected_html["content"])
+            self.assertNotIn("passport-pass.pdf", selected_html["content"])
+            self.assertEqual(replacement["content"], b"REPLACEMENT")
+            self.assertNotIn("passport-pass.pdf", selected_filenames)
 
         subject, body, attachments = admin_panel.customer_notification(
             cl, case, "needs_client_follow_up", "Please resend the bank statement.")
@@ -1485,6 +1535,36 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(parsed.message_id, "<client-1@example.test>")
         self.assertEqual(parsed.attachments[0].content, b"PDFDATA")
         self.assertEqual(parsed.attachments[0].evidence_id, "home_ties_evidence")
+
+    def test_poll_email_in_human_review_records_reply_and_files_without_auto_response(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.HUMAN_REVIEW
+        st.save_case(case)
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(
+            st, cl, email_model.EmailDemoModel(), router=router, today=TODAY)
+        with tempfile.TemporaryDirectory() as tmp:
+            poller = email_bridge.EmailPoller(eng, st, attachment_dir=tmp)
+            results = poller.poll_raw([self._raw_email(
+                message_id="<human-review-reply@example.test>",
+                body="The new bank statement replaces the old one.",
+                attachments=[("replacement_bank.pdf", "application/pdf", b"PDFDATA")])])
+
+            messages = st.human_review_messages("t1")
+            files = st.human_review_files("t1")
+
+            self.assertEqual(results, [])
+            self.assertEqual(sink, [])
+            self.assertEqual(len(messages), 1)
+            self.assertIn("replaces the old one", messages[0]["body"])
+            self.assertEqual(len(files), 1)
+            self.assertEqual(files[0]["filename"], "replacement_bank.pdf")
+            self.assertTrue(os.path.exists(files[0]["document_ref"]))
+            self.assertEqual(st.get_case("t1").stage, state.Stage.HUMAN_REVIEW)
 
     def test_poll_email_attachment_advances_engine_and_sends_pack(self):
         cl = load()

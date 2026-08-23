@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS adviser_reviews (
     decision TEXT NOT NULL,
     note TEXT,
     reviewer TEXT,
+    package_selection TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -157,6 +158,29 @@ CREATE TABLE IF NOT EXISTS adviser_notifications (
     status TEXT NOT NULL,
     error TEXT,
     message_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS human_review_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    raw_message_id TEXT,
+    from_addr TEXT,
+    body TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS human_review_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    message_id INTEGER,
+    raw_message_id TEXT,
+    from_addr TEXT,
+    filename TEXT NOT NULL,
+    content_type TEXT,
+    document_ref TEXT NOT NULL,
+    evidence_id TEXT,
+    selected_by_default INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -369,17 +393,21 @@ class Store(object):
             (case_id, evidence_id, check_kind, result, json.dumps(detail or {})))
         self.conn.commit()
 
-    def record_adviser_review(self, case_id, decision, note=None, reviewer=None):
+    def record_adviser_review(self, case_id, decision, note=None, reviewer=None,
+                               package_selection=None):
         cur = self.conn.execute(
-            "INSERT INTO adviser_reviews (case_id, decision, note, reviewer) "
-            "VALUES (?,?,?,?)",
-            (case_id, decision, note, reviewer))
+            "INSERT INTO adviser_reviews "
+            "(case_id, decision, note, reviewer, package_selection) "
+            "VALUES (?,?,?,?,?)",
+            (case_id, decision, note, reviewer,
+             json.dumps(package_selection or [])))
         self.conn.commit()
         self.log(case_id, "adviser_review_recorded", {
             "review_id": cur.lastrowid,
             "decision": decision,
             "reviewer": reviewer,
             "note": note,
+            "package_selection": package_selection or [],
         })
         return cur.lastrowid
 
@@ -413,6 +441,54 @@ class Store(object):
         return self.conn.execute(
             "SELECT * FROM adviser_notifications WHERE case_id = ? ORDER BY id DESC LIMIT 1",
             (case_id,)).fetchone()
+
+    def record_human_review_message(self, case_id, raw_message_id=None,
+                                    from_addr=None, body=None):
+        cur = self.conn.execute(
+            "INSERT INTO human_review_messages "
+            "(case_id, raw_message_id, from_addr, body) VALUES (?,?,?,?)",
+            (case_id, raw_message_id, from_addr, body))
+        self.conn.commit()
+        self.log(case_id, "human_review_message_recorded", {
+            "message_id": cur.lastrowid,
+            "raw_message_id": raw_message_id,
+            "from": from_addr,
+            "has_body": bool(body),
+        })
+        return cur.lastrowid
+
+    def record_human_review_file(self, case_id, filename, document_ref,
+                                 message_id=None, raw_message_id=None,
+                                 from_addr=None, content_type=None,
+                                 evidence_id=None, selected_by_default=False):
+        cur = self.conn.execute(
+            "INSERT INTO human_review_files "
+            "(case_id, message_id, raw_message_id, from_addr, filename, content_type, "
+            "document_ref, evidence_id, selected_by_default) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (case_id, message_id, raw_message_id, from_addr, filename, content_type,
+             document_ref, evidence_id, 1 if selected_by_default else 0))
+        self.conn.commit()
+        self.log(case_id, "human_review_file_recorded", {
+            "file_id": cur.lastrowid,
+            "message_id": message_id,
+            "raw_message_id": raw_message_id,
+            "from": from_addr,
+            "filename": filename,
+            "document_ref": document_ref,
+            "evidence_id": evidence_id,
+        })
+        return cur.lastrowid
+
+    def human_review_messages(self, case_id):
+        return self.conn.execute(
+            "SELECT * FROM human_review_messages WHERE case_id = ? ORDER BY id DESC",
+            (case_id,)).fetchall()
+
+    def human_review_files(self, case_id):
+        return self.conn.execute(
+            "SELECT * FROM human_review_files WHERE case_id = ? ORDER BY id DESC",
+            (case_id,)).fetchall()
 
     # --- email threading -----------------------------------------------
 
@@ -476,6 +552,12 @@ class Store(object):
                 self.conn.execute(
                     "ALTER TABLE document_extraction_events ADD COLUMN %s %s" % (
                         name, ddl))
+        review_columns = set(row["name"] for row in self.conn.execute(
+            "PRAGMA table_info(adviser_reviews)").fetchall())
+        if "package_selection" not in review_columns:
+            self.conn.execute(
+                "ALTER TABLE adviser_reviews ADD COLUMN "
+                "package_selection TEXT NOT NULL DEFAULT '[]'")
 
     def _backfill_email_sender_cases(self):
         rows = self.conn.execute(

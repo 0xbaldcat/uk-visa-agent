@@ -132,6 +132,22 @@ textarea, input[type=text] {
   padding: 9px;
   font: inherit;
 }
+.material-option {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 8px;
+  align-items: start;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+}
+.material-option:first-child { border-top: 0; }
+.material-option input { margin-top: 3px; }
+.option-title { font-weight: 650; }
+.timeline-item {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.timeline-item:first-child { border-top: 0; }
 .actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 .notice {
   border: 1px solid #bdd6ca;
@@ -256,10 +272,11 @@ def _load_local_env_file(path):
                 os.environ[key] = " ".join(parts) if parts else value.strip()
 
 
-def notify_client(st, cl, case_id, review_id, decision, note):
+def notify_client(st, cl, case_id, review_id, decision, note, selected_tokens=None):
     case = st.get_case(case_id)
     to_addr = client_email_for_case(st, case_id)
-    subject, body, attachments = customer_notification(cl, case, decision, note)
+    subject, body, attachments = customer_notification(
+        cl, case, decision, note, selected_tokens=selected_tokens, st=st)
     if not to_addr:
         st.record_adviser_notification(
             case_id, decision, "skipped", review_id=review_id,
@@ -289,7 +306,7 @@ def notify_client(st, cl, case_id, review_id, decision, note):
         return "failed"
 
 
-def customer_notification(cl, case, decision, note):
+def customer_notification(cl, case, decision, note, selected_tokens=None, st=None):
     if decision == "approved_for_final_report":
         subject = "[visa-agent:%s] Adviser review complete" % case.id
         body = (
@@ -300,17 +317,20 @@ def customer_notification(cl, case, decision, note):
             "wrong before you use it.\n\n"
             "This service does not submit the visa application for you."
         ) % case.id
-        html_report = render_client_final_report_html(cl, case, note)
+        selected_rows = selected_material_rows(cl, case, selected_tokens, st=st)
+        html_report = render_client_final_report_html(
+            cl, case, note, selected_rows=selected_rows)
         attachments = [{
             "filename": "visa-final-review-report.pdf",
             "content_type": "application/pdf",
-            "content": render_client_final_report_pdf(cl, case, note),
+            "content": render_client_final_report_pdf(
+                cl, case, note, selected_rows=selected_rows),
         }, {
             "filename": "visa-final-review-report.html",
             "content_type": "text/html",
             "content": html_report,
         }]
-        attachments.extend(accepted_material_attachments(cl, case))
+        attachments.extend(material_attachments(selected_rows))
         return subject, body, attachments
     subject = "[visa-agent:%s] Adviser follow-up needed" % case.id
     follow_up = note or "The adviser needs a little more information before final review."
@@ -324,8 +344,8 @@ def customer_notification(cl, case, decision, note):
     return subject, body, []
 
 
-def render_client_final_report(cl, case, adviser_note=None):
-    accepted = accepted_material_rows(cl, case)
+def render_client_final_report(cl, case, adviser_note=None, selected_rows=None):
+    accepted = selected_rows if selected_rows is not None else selected_material_rows(cl, case)
     lines = [
         "# Reviewed Visa Materials Package",
         "",
@@ -362,8 +382,8 @@ def render_client_final_report(cl, case, adviser_note=None):
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_client_final_report_html(cl, case, adviser_note=None):
-    accepted = accepted_material_rows(cl, case)
+def render_client_final_report_html(cl, case, adviser_note=None, selected_rows=None):
+    accepted = selected_rows if selected_rows is not None else selected_material_rows(cl, case)
     rows = []
     for item in accepted:
         notes = list(item.get("advisories") or [])
@@ -416,8 +436,9 @@ def render_client_final_report_html(cl, case, adviser_note=None):
         "".join(rows))
 
 
-def render_client_final_report_pdf(cl, case, adviser_note=None):
-    markdown = render_client_final_report(cl, case, adviser_note=adviser_note)
+def render_client_final_report_pdf(cl, case, adviser_note=None, selected_rows=None):
+    markdown = render_client_final_report(
+        cl, case, adviser_note=adviser_note, selected_rows=selected_rows)
     lines = []
     for line in markdown.splitlines():
         clean = line.replace("#", "").replace("*", "").strip()
@@ -485,6 +506,8 @@ def accepted_material_rows(cl, case):
         ]
         rows.append({
             "evidence_id": ev_id,
+            "token": "accepted:%s" % ev_id,
+            "source": "validated_checklist",
             "label": ev["label"],
             "document_ref": document_ref,
             "filename": os.path.basename(document_ref) if document_ref else "[no file recorded]",
@@ -494,9 +517,48 @@ def accepted_material_rows(cl, case):
     return rows
 
 
-def accepted_material_attachments(cl, case):
+def human_review_file_rows(st, case):
+    if st is None or not hasattr(st, "human_review_files"):
+        return []
+    rows = []
+    for row in st.human_review_files(case.id):
+        rows.append({
+            "token": "review_file:%s" % row["id"],
+            "source": "human_review_upload",
+            "label": row["evidence_id"] or "Human-review file",
+            "document_ref": row["document_ref"],
+            "filename": row["filename"],
+            "attached": bool(row["document_ref"] and os.path.exists(row["document_ref"])),
+            "advisories": [],
+            "created_at": row["created_at"],
+            "from_addr": row["from_addr"],
+            "selected_by_default": bool(row["selected_by_default"]),
+        })
+    return rows
+
+
+def material_options(cl, case, st=None):
+    options = []
+    for row in accepted_material_rows(cl, case):
+        row = dict(row)
+        row["selected_by_default"] = True
+        options.append(row)
+    options.extend(human_review_file_rows(st, case))
+    return options
+
+
+def selected_material_rows(cl, case, selected_tokens=None, st=None):
+    options = material_options(cl, case, st=st)
+    if selected_tokens is None:
+        selected_tokens = [
+            item["token"] for item in options if item.get("selected_by_default")]
+    selected = set(selected_tokens)
+    return [item for item in options if item["token"] in selected]
+
+
+def material_attachments(rows):
     attachments = []
-    for item in accepted_material_rows(cl, case):
+    for item in rows:
         if not item["attached"]:
             continue
         content_type = mimetypes.guess_type(item["document_ref"])[0] or "application/octet-stream"
@@ -508,6 +570,10 @@ def accepted_material_attachments(cl, case):
             "content": content,
         })
     return attachments
+
+
+def accepted_material_attachments(cl, case):
+    return material_attachments(selected_material_rows(cl, case))
 
 
 def status_class(value):
@@ -610,6 +676,8 @@ def render_case(st, cl, case_id, query=None):
     satisfied, missing, failing = case.outstanding(cl)
     review = st.latest_adviser_review(case_id)
     notification = st.latest_adviser_notification(case_id)
+    review_messages = st.human_review_messages(case_id) if hasattr(st, "human_review_messages") else []
+    review_files = st.human_review_files(case_id) if hasattr(st, "human_review_files") else []
     pack = review_pack(cl, case)
     rows = []
     for ev in cl.required_evidence(case.slots):
@@ -654,7 +722,7 @@ def render_case(st, cl, case_id, query=None):
             text += " · customer notification: %s" % notified
         notice = '<div class="notice">%s</div>' % esc(text)
     history = st.conn.execute(
-        "SELECT decision, note, reviewer, created_at FROM adviser_reviews "
+        "SELECT decision, note, reviewer, package_selection, created_at FROM adviser_reviews "
         "WHERE case_id = ? ORDER BY id DESC LIMIT 8", (case_id,)).fetchall()
     history_rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
@@ -663,6 +731,22 @@ def render_case(st, cl, case_id, query=None):
         for row in history)
     if not history_rows:
         history_rows = '<tr><td colspan="4" class="meta">No review decisions yet.</td></tr>'
+    review_message_rows = "".join(
+        '<div class="timeline-item"><div class="meta">{time} · {sender}</div>'
+        '<div>{body}</div></div>'.format(
+            time=esc(row["created_at"]), sender=esc(row["from_addr"]),
+            body=esc(row["body"]))
+        for row in review_messages)
+    if not review_message_rows:
+        review_message_rows = '<div class="meta">No human-review client replies yet.</div>'
+    review_file_rows = "".join(
+        "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+            esc(row["created_at"]), esc(row["filename"]), esc(row["evidence_id"] or ""),
+            esc(row["document_ref"]))
+        for row in review_files)
+    if not review_file_rows:
+        review_file_rows = '<tr><td colspan="4" class="meta">No human-review files yet.</td></tr>'
+    material_html = render_material_selector(cl, case, st)
     return """
 <div class="panel content">
   <div class="case-id">{case_id}</div>
@@ -679,11 +763,15 @@ def render_case(st, cl, case_id, query=None):
   <h2>Adviser Decision</h2>
   <form method="post" action="/review">
     <input type="hidden" name="case_id" value="{case_id}">
-    <label>Review note</label>
-    <textarea name="note" rows="3" placeholder="What did you decide or what should the client provide next?"></textarea>
+    <input type="hidden" name="materials_present" value="1">
+    <label>Message / adviser note</label>
+    <textarea name="note" rows="5" placeholder="For follow-up, write the email to the client. For approval, record the adviser note for the final package."></textarea>
+    <h3>Final Package Selection</h3>
+    <div class="meta">Default checked items are machine-validated checklist files. Human-review files are opt-in.</div>
+    {material_html}
     <div class="actions">
-      <button name="decision" value="approved_for_final_report">Approve for final report</button>
-      <button class="secondary" name="decision" value="needs_client_follow_up">Needs client follow-up</button>
+      <button name="decision" value="approved_for_final_report">Approve for final report with selected files</button>
+      <button class="secondary" name="decision" value="needs_client_follow_up">Needs client follow-up / send message</button>
     </div>
   </form>
 
@@ -695,6 +783,12 @@ def render_case(st, cl, case_id, query=None):
 
   <h2>Materials</h2>
   <table><thead><tr><th>Material</th><th>Status</th><th>File</th></tr></thead><tbody>{rows}</tbody></table>
+
+  <h2>Human Review Client Replies</h2>
+  {review_message_rows}
+
+  <h2>Human Review Files</h2>
+  <table><thead><tr><th>Time</th><th>File</th><th>Mapped checklist item</th><th>Saved path</th></tr></thead><tbody>{review_file_rows}</tbody></table>
 
   <h2>Internal Review Pack</h2>
   <pre>{pack}</pre>
@@ -710,9 +804,33 @@ def render_case(st, cl, case_id, query=None):
         review_html=review_html,
         notification_html=notification_html,
         history_rows=history_rows,
+        material_html=material_html,
         slot_rows=slot_rows,
         rows="".join(rows),
+        review_message_rows=review_message_rows,
+        review_file_rows=review_file_rows,
         pack=esc(pack))
+
+
+def render_material_selector(cl, case, st):
+    options = material_options(cl, case, st=st)
+    if not options:
+        return '<div class="meta">No files available for final package selection.</div>'
+    items = []
+    for item in options:
+        checked = " checked" if item.get("selected_by_default") else ""
+        source = "Checklist-validated" if item["source"] == "validated_checklist" else "Human-review upload"
+        availability = "available" if item.get("attached") else "file missing"
+        items.append(
+            '<label class="material-option">'
+            '<input type="checkbox" name="material" value="{token}"{checked}>'
+            '<div><div class="option-title">{label}</div>'
+            '<div class="meta">{source} · {filename} · {availability}</div>'
+            '</div></label>'.format(
+                token=esc(item["token"]), checked=checked, label=esc(item["label"]),
+                source=esc(source), filename=esc(item["filename"]),
+                availability=esc(availability)))
+    return "".join(items)
 
 
 def render_app(st, cl, query):
@@ -750,6 +868,9 @@ class Handler(BaseHTTPRequestHandler):
         case_id = (data.get("case_id") or [""])[0]
         decision = (data.get("decision") or [""])[0]
         note = (data.get("note") or [""])[0].strip()
+        selected_tokens = (
+            data.get("material") if "materials_present" in data and
+            decision == "approved_for_final_report" else None)
         if decision not in ("approved_for_final_report", "needs_client_follow_up"):
             self.send_error(400, "unknown decision")
             return
@@ -758,9 +879,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404, "case not found")
             return
         review_id = st.record_adviser_review(
-            case_id, decision, note=note, reviewer="admin_panel")
+            case_id, decision, note=note, reviewer="admin_panel",
+            package_selection=selected_tokens)
         cl = load_checklist()
-        notification_status = notify_client(st, cl, case_id, review_id, decision, note)
+        notification_status = notify_client(
+            st, cl, case_id, review_id, decision, note,
+            selected_tokens=selected_tokens)
         self.send_response(303)
         self.send_header("Location", "/?case=%s&saved=%s&notified=%s" % (
             urllib.parse.quote(case_id), urllib.parse.quote(decision),
