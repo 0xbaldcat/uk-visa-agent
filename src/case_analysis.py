@@ -6,6 +6,7 @@ for an adviser. Rules compute facts, an optional model may propose observations,
 and code validates every reference before anything reaches the review pack.
 """
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import diagnose
@@ -256,6 +257,9 @@ def validate_observation(candidate, facts, rubric=None):
     bad_action = _prohibited_question_action(candidate.get("question", ""), rubric)
     if bad_action:
         return False, "prohibited question action: %s" % bad_action
+    bad_window = _unsupported_time_window(candidate.get("question", ""), candidate, dimension)
+    if bad_window:
+        return False, "unsupported time window: %s" % bad_window
     return True, ""
 
 
@@ -311,6 +315,66 @@ def _prohibited_question_action(question, rubric):
                 "near departure" in lowered):
             return action
     return None
+
+
+def _unsupported_time_window(question, candidate, dimension):
+    cited_values = set()
+    for ref in candidate.get("evidence_refs") or []:
+        cited_values.add(str(ref.get("value")).lower())
+    allowed_windows = set(_allowed_time_windows(dimension))
+    for window in _time_windows(question):
+        if window["text"] in allowed_windows:
+            continue
+        if window["number"] in cited_values:
+            continue
+        return window["text"]
+    return None
+
+
+def _allowed_time_windows(dimension):
+    out = []
+    if dimension.get("id") == "travel_and_immigration_pattern":
+        out.extend(["last 12 months", "past 12 months", "previous 12 months"])
+    if dimension.get("id") == "financial_resources_and_trip_cost":
+        out.append("3 months")
+    return out
+
+
+def _time_windows(question):
+    lowered = str(question or "").lower()
+    numbers = {
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+        "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+        "eleven": "11", "twelve": "12",
+    }
+    pattern = re.compile(
+        r"\b(last|past|previous|within|next|future)\s+"
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+"
+        r"(day|days|week|weeks|month|months|year|years)\b")
+    out = []
+    for match in pattern.finditer(lowered):
+        number = numbers.get(match.group(2), match.group(2))
+        unit = match.group(3)
+        if not unit.endswith("s"):
+            unit = unit + "s"
+        out.append({
+            "text": "%s %s %s" % (match.group(1), number, unit),
+            "number": number,
+        })
+    before_pattern = re.compile(
+        r"\bin the\s+"
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+"
+        r"(day|days|week|weeks|month|months|year|years)\s+before\b")
+    for match in before_pattern.finditer(lowered):
+        number = numbers.get(match.group(1), match.group(1))
+        unit = match.group(2)
+        if not unit.endswith("s"):
+            unit = unit + "s"
+        out.append({
+            "text": "previous %s %s" % (number, unit),
+            "number": number,
+        })
+    return out
 
 
 def _same_value(left, right):

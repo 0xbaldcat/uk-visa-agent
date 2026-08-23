@@ -18,6 +18,8 @@ import email_model
 import store as store_mod
 
 
+APPLICATION_DATE = "2026-08-23"
+
 SLOTS = {
     "applicant_name": "Mei Ling Chen",
     "nationality": "Chinese",
@@ -90,8 +92,12 @@ def main():
         raise SystemExit(
             "Set VISA_AGENT_CASE_ANALYSIS_LLM=1 and VISA_AGENT_LLM_API_KEY or DEEPSEEK_API_KEY")
 
-    analysis = case_analysis.analyse(checklist, case, model=model)
+    analysis = case_analysis.analyse(
+        checklist, case, model=model, application_date=APPLICATION_DATE)
     print(json.dumps({
+        "application_date": APPLICATION_DATE,
+        "application_date_fact": analysis["facts"].get("computed.application_date"),
+        "has_application_date_fact": "computed.application_date" in analysis["facts"],
         "provider": getattr(model.case_analysis_client, "base_url", None),
         "model": getattr(model.case_analysis_client, "model_name", None),
         "rubric": analysis["rubric_meta"],

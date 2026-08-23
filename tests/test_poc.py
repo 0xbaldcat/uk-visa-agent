@@ -141,6 +141,7 @@ class CaseAnalysisModel(llm.StubModel):
             "analyse_case",
             sorted(context["facts"].keys()),
             [item["id"] for item in context.get("analysis_dimensions", [])],
+            context,
         ))
         return list(self.observations)
 
@@ -1128,6 +1129,53 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertIn(
             "prohibited question action",
             case_analysis.validate_observation(bad_question, facts)[1])
+
+    def test_case_analysis_rejects_invented_time_windows(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        facts = case_analysis.build_fact_context(cl, case)
+        candidate = {
+            "dimension_id": "travel_and_immigration_pattern",
+            "limb": "travel_history",
+            "observation_type": "travel_pattern_context",
+            "observation": "Previous travel pattern needs context.",
+            "evidence_refs": [
+                {"source": "passport.prior_compliant_travel", "value": True},
+                {"source": "intake.trip_length_days", "value": 90},
+            ],
+            "missing_context": "Previous visit pattern.",
+            "question": "Could you list previous UK visits in the last ten years?",
+            "source_refs": ["caseworker_guidance:7_3"],
+        }
+
+        self.assertEqual(
+            case_analysis.validate_observation(candidate, facts)[1],
+            "unsupported time window: last 10 years")
+
+        before_phrase = dict(candidate, question="Could you list UK visits in the 10 years before applying?")
+        self.assertEqual(
+            case_analysis.validate_observation(before_phrase, facts)[1],
+            "unsupported time window: previous 10 years")
+
+        allowed = dict(candidate, question="Could you explain any UK visits in the previous 12 months?")
+        self.assertTrue(case_analysis.validate_observation(allowed, facts)[0])
+
+        allowed_before = dict(candidate, question="Could you list UK visits in the 12 months before applying?")
+        self.assertTrue(case_analysis.validate_observation(allowed_before, facts)[0])
+
+    def test_application_date_is_passed_to_case_analysis_model(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        model = CaseAnalysisModel([])
+
+        analysis = case_analysis.analyse(cl, case, model=model, application_date=TODAY)
+
+        self.assertEqual(
+            analysis["facts"]["computed.application_date"],
+            str(TODAY))
+        self.assertEqual(
+            model.calls[0][3]["facts"]["computed.application_date"],
+            str(TODAY))
 
     def test_review_pack_includes_whole_case_analysis_layer(self):
         cl = load()
