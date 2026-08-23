@@ -503,23 +503,8 @@
             默认勾选校验通过且未被替代的文件；顾问可取消默认项，也可加入沟通过程中的新文件。
           </div>
         </div>
-        <div class="split">
-          <div class="lane workflow">
-            <h3>机器校验决定默认值</h3>
-            <ul>
-              <li><code>validation_passed</code>：文件是否通过 checklist 规则</li>
-              <li>通过且仍为有效版本的文件默认进入待打包选择</li>
-              <li>解析和基本文件安全处理仍可继续辅助顾问</li>
-            </ul>
-          </div>
-          <div class="lane agent">
-            <h3>人类顾问决定最终结果</h3>
-            <ul>
-              <li><code>included_in_final_pack</code>：文件最终是否交付</li>
-              <li>顾问可以推翻机器默认选择，并写明替换或排除原因</li>
-              <li>打包时冻结文件版本、选择人、时间和理由，形成不可变快照</li>
-            </ul>
-          </div>
+        <div class="decision-rule">
+          系统根据材料校验结果给出默认选择，顾问可以增删并确认最终材料包。
         </div>
         <div class="callout amber">
           <strong>关键控制权转移：</strong>进入人工复核不是“让人点一下批准后继续自动跑”，而是一次明确的控制权交接。
