@@ -7,6 +7,7 @@ pack, and persist the adviser's decision.
 """
 import argparse
 import html
+import mimetypes
 import os
 import shlex
 import smtplib
@@ -294,16 +295,28 @@ def customer_notification(cl, case, decision, note):
         body = (
             "Your materials have been reviewed by an adviser.\n\n"
             "Case ID: %s\n\n"
-            "I've attached the final review report for this stage. Please read it "
-            "and tell us if any factual detail is wrong before you use it.\n\n"
+            "I've attached the reviewed materials package for this stage. Please "
+            "read the report and tell us if any factual detail or filename is "
+            "wrong before you use it.\n\n"
             "This service does not submit the visa application for you."
         ) % case.id
-        report = render_client_final_report(cl, case, note)
-        return subject, body, [{
+        md_report = render_client_final_report(cl, case, note)
+        html_report = render_client_final_report_html(cl, case, note)
+        attachments = [{
+            "filename": "visa-final-review-report.pdf",
+            "content_type": "application/pdf",
+            "content": render_client_final_report_pdf(cl, case, note),
+        }, {
+            "filename": "visa-final-review-report.html",
+            "content_type": "text/html",
+            "content": html_report,
+        }, {
             "filename": "visa-final-review-report.md",
             "content_type": "text/markdown",
-            "content": report,
+            "content": md_report,
         }]
+        attachments.extend(accepted_material_attachments(cl, case))
+        return subject, body, attachments
     subject = "[visa-agent:%s] Adviser follow-up needed" % case.id
     follow_up = note or "The adviser needs a little more information before final review."
     body = (
@@ -317,43 +330,223 @@ def customer_notification(cl, case, decision, note):
 
 
 def render_client_final_report(cl, case, adviser_note=None):
-    satisfied, missing, failing = case.outstanding(cl)
+    accepted = accepted_material_rows(cl, case)
+    _, missing, failing = case.outstanding(cl)
     lines = [
-        "# Visa Materials Review Report",
+        "# Reviewed Visa Materials Package",
         "",
         "Applicant: %s" % (case.slots.get("applicant_name") or "unknown"),
-        "Status: adviser reviewed",
         "",
-        "## Summary",
-        "- Materials accepted: %d" % len(satisfied),
-        "- Missing materials: %d" % len(missing),
-        "- Materials needing replacement: %d" % len(failing),
+        ("This report lists the documents an adviser reviewed and the files "
+         "included in this package. Check the filenames and facts before using "
+         "the materials for your application."),
         "",
     ]
     if adviser_note:
         lines.extend(["## Adviser Note", adviser_note, ""])
-    lines.append("## Accepted Materials")
-    for ev_id in satisfied:
-        ev = cl.evidence(ev_id) or {"label": ev_id}
-        lines.append("- %s" % ev["label"])
+    lines.append("## Included Accepted Materials")
+    if accepted:
+        for item in accepted:
+            line = "- %s: %s" % (item["label"], item["filename"])
+            if item.get("attached"):
+                line += " (attached)"
+            else:
+                line += " (accepted, but file was not found for email attachment)"
+            lines.append(line)
+            if item.get("advisories"):
+                for advisory in item["advisories"]:
+                    lines.append("  - Note: %s" % advisory)
+    else:
+        lines.append("- No accepted material files are ready to include yet.")
     if missing:
-        lines.extend(["", "## Missing Materials"])
+        lines.extend(["", "## Still Missing"])
         for ev_id in missing:
             ev = cl.evidence(ev_id) or {"label": ev_id}
             lines.append("- %s" % ev["label"])
     if failing:
-        lines.extend(["", "## Materials Needing Replacement"])
+        lines.extend(["", "## Not Included: Needs Replacement"])
         for ev_id in failing:
             ev = cl.evidence(ev_id) or {"label": ev_id}
-            lines.append("- %s" % ev["label"])
+            rec = case.evidence.get(ev_id) or {}
+            filename = os.path.basename(rec.get("document_ref") or "")
+            suffix = " (%s)" % filename if filename else ""
+            lines.append("- %s%s" % (ev["label"], suffix))
+            for failure in case._blocking(rec):
+                lines.append("  - %s" % failure.get("message"))
     lines.extend([
         "",
         "## Limits",
-        "- This report confirms materials were reviewed for completeness and consistency.",
+        "- This report confirms the listed materials were reviewed for completeness and consistency.",
         "- It is not a visa outcome prediction.",
         "- This service does not submit the application.",
     ])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_client_final_report_html(cl, case, adviser_note=None):
+    accepted = accepted_material_rows(cl, case)
+    _, missing, failing = case.outstanding(cl)
+    rows = []
+    for item in accepted:
+        notes = list(item.get("advisories") or [])
+        if not item.get("attached"):
+            notes.append("Accepted, but the source file was not found for email attachment.")
+        rows.append(
+            "<tr><td>%s</td><td>%s</td><td>Included</td><td>%s</td></tr>" % (
+                esc(item["label"]), esc(item["filename"]),
+                esc("; ".join(notes) if notes else "Reviewed and accepted")))
+    if not rows:
+        rows.append("<tr><td colspan=\"4\">No accepted material files are ready to include yet.</td></tr>")
+    missing_items = "".join("<li>%s</li>" % esc((cl.evidence(ev_id) or {"label": ev_id})["label"])
+                            for ev_id in missing)
+    failing_items = []
+    for ev_id in failing:
+        ev = cl.evidence(ev_id) or {"label": ev_id}
+        rec = case.evidence.get(ev_id) or {}
+        filename = os.path.basename(rec.get("document_ref") or "")
+        failures = "; ".join(f.get("message") or "" for f in case._blocking(rec))
+        failing_items.append("<li>%s%s%s</li>" % (
+            esc(ev["label"]),
+            (" - " + esc(filename)) if filename else "",
+            (": " + esc(failures)) if failures else ""))
+    adviser = ("<section><h2>Adviser Note</h2><p>%s</p></section>" %
+               esc(adviser_note)) if adviser_note else ""
+    return """<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reviewed Visa Materials Package</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #1f2523; line-height: 1.45; margin: 32px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 28px; }
+    table { border-collapse: collapse; width: 100%%; margin-top: 12px; }
+    th, td { border: 1px solid #d8ded8; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef3ef; }
+    .limits { color: #515c57; }
+  </style>
+</head>
+<body>
+  <h1>Reviewed Visa Materials Package</h1>
+  <p><strong>Applicant:</strong> %s</p>
+  <p>This report lists the documents an adviser reviewed and the files included in this package. Check the filenames and facts before using the materials for your application.</p>
+  %s
+  <h2>Included Accepted Materials</h2>
+  <table>
+    <thead><tr><th>Material</th><th>File</th><th>Package status</th><th>Review note</th></tr></thead>
+    <tbody>%s</tbody>
+  </table>
+  %s
+  %s
+  <h2>Limits</h2>
+  <ul class="limits">
+    <li>This report confirms the listed materials were reviewed for completeness and consistency.</li>
+    <li>It is not a visa outcome prediction.</li>
+    <li>This service does not submit the application.</li>
+  </ul>
+</body>
+</html>
+""" % (
+        esc(case.slots.get("applicant_name") or "unknown"),
+        adviser,
+        "".join(rows),
+        ("<h2>Still Missing</h2><ul>%s</ul>" % missing_items) if missing else "",
+        ("<h2>Not Included: Needs Replacement</h2><ul>%s</ul>" %
+         "".join(failing_items)) if failing else "")
+
+
+def render_client_final_report_pdf(cl, case, adviser_note=None):
+    markdown = render_client_final_report(cl, case, adviser_note=adviser_note)
+    lines = []
+    for line in markdown.splitlines():
+        clean = line.replace("#", "").replace("*", "").strip()
+        if not clean:
+            lines.append("")
+            continue
+        while len(clean) > 88:
+            cut = clean.rfind(" ", 0, 88)
+            if cut <= 0:
+                cut = 88
+            lines.append(clean[:cut])
+            clean = clean[cut:].strip()
+        lines.append(clean)
+    return simple_text_pdf(lines[:52])
+
+
+def simple_text_pdf(lines):
+    """Small dependency-free PDF for the PoC final report."""
+    def pdf_escape(value):
+        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    text_ops = ["BT", "/F1 10 Tf", "50 760 Td", "14 TL"]
+    for index, line in enumerate(lines):
+        if index:
+            text_ops.append("T*")
+        text_ops.append("(%s) Tj" % pdf_escape(line))
+    text_ops.append("ET")
+    stream = "\n".join(text_ops).encode("utf-8")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for idx, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(("%d 0 obj\n" % idx).encode("ascii"))
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref = len(pdf)
+    pdf.extend(("xref\n0 %d\n" % (len(objects) + 1)).encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(("%010d 00000 n \n" % offset).encode("ascii"))
+    pdf.extend(
+        ("trailer << /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" %
+         (len(objects) + 1, xref)).encode("ascii"))
+    return bytes(pdf)
+
+
+def accepted_material_rows(cl, case):
+    satisfied, _, _ = case.outstanding(cl)
+    rows = []
+    for ev_id in satisfied:
+        ev = cl.evidence(ev_id) or {"label": ev_id}
+        rec = case.evidence.get(ev_id) or {}
+        document_ref = rec.get("document_ref") or ""
+        advisories = [
+            f.get("message") for f in (rec.get("failures") or [])
+            if f.get("advisory") and f.get("message")
+        ]
+        rows.append({
+            "evidence_id": ev_id,
+            "label": ev["label"],
+            "document_ref": document_ref,
+            "filename": os.path.basename(document_ref) if document_ref else "[no file recorded]",
+            "attached": bool(document_ref and os.path.exists(document_ref)),
+            "advisories": advisories,
+        })
+    return rows
+
+
+def accepted_material_attachments(cl, case):
+    attachments = []
+    for item in accepted_material_rows(cl, case):
+        if not item["attached"]:
+            continue
+        content_type = mimetypes.guess_type(item["document_ref"])[0] or "application/octet-stream"
+        with open(item["document_ref"], "rb") as fh:
+            content = fh.read()
+        attachments.append({
+            "filename": item["filename"],
+            "content_type": content_type,
+            "content": content,
+        })
+    return attachments
 
 
 def status_class(value):

@@ -1012,14 +1012,46 @@ class TestAdminPanel(unittest.TestCase):
 
     def test_customer_notification_payloads_match_decision(self):
         cl = load()
-        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        with tempfile.TemporaryDirectory() as td:
+            passport_path = os.path.join(td, "passport-pass.pdf")
+            bank_path = os.path.join(td, "bank-fail.pdf")
+            with open(passport_path, "wb") as fh:
+                fh.write(b"PASSPORT")
+            with open(bank_path, "wb") as fh:
+                fh.write(b"BANK")
+            evidence = {
+                "passport": dict(COMPLETE_EVIDENCE["passport"],
+                                 document_ref=passport_path),
+                "bank_statements": {
+                    "document_ref": bank_path,
+                    "fields": {"account_holder_name": "Wei Zhang"},
+                    "failures": [validate.Failure(
+                        "name_matches", "account_holder_name",
+                        "the name on the document (Wei Zhang) does not match the applicant").to_dict()],
+                },
+            }
+            _, case = make_case(evidence=evidence)
 
-        subject, body, attachments = admin_panel.customer_notification(
-            cl, case, "approved_for_final_report", "Reviewed by Alex.")
-        self.assertIn("Adviser review complete", subject)
-        self.assertIn("final review report", body)
-        self.assertEqual(attachments[0]["filename"], "visa-final-review-report.md")
-        self.assertIn("Reviewed by Alex.", attachments[0]["content"])
+            subject, body, attachments = admin_panel.customer_notification(
+                cl, case, "approved_for_final_report", "Reviewed by Alex.")
+            filenames = [a["filename"] for a in attachments]
+            md_report = next(a for a in attachments
+                             if a["filename"] == "visa-final-review-report.md")
+            html_report = next(a for a in attachments
+                               if a["filename"] == "visa-final-review-report.html")
+            pdf_report = next(a for a in attachments
+                              if a["filename"] == "visa-final-review-report.pdf")
+            passport = next(a for a in attachments
+                            if a["filename"] == "passport-pass.pdf")
+            self.assertIn("Adviser review complete", subject)
+            self.assertIn("reviewed materials package", body)
+            self.assertIn("Reviewed by Alex.", md_report["content"])
+            self.assertIn("passport-pass.pdf", md_report["content"])
+            self.assertIn("passport-pass.pdf", html_report["content"])
+            self.assertTrue(pdf_report["content"].startswith(b"%PDF-1.4"))
+            self.assertIn("bank-fail.pdf", md_report["content"])
+            self.assertEqual(passport["content"], b"PASSPORT")
+            self.assertNotIn("bank-fail.pdf", filenames)
 
         subject, body, attachments = admin_panel.customer_notification(
             cl, case, "needs_client_follow_up", "Please resend the bank statement.")
