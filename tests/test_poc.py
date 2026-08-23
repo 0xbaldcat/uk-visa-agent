@@ -1118,6 +1118,28 @@ class TestWholeCaseAnalysis(unittest.TestCase):
             case_analysis.validate_observation(broad, facts)[1],
             "consistent_evidence must not clear the whole case")
 
+    def test_positive_observation_rejects_false_match(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        facts = case_analysis.build_fact_context(cl, case)
+        facts["sponsor_status_proof.sponsor_name"] = "Wei Chen"
+        candidate = {
+            "dimension_id": "cross_record_credibility_and_consistency",
+            "limb": "sponsor_consistency",
+            "observation_type": "consistent_evidence",
+            "observation": "The two sponsor names match across the cited records.",
+            "evidence_refs": [
+                {"source": "sponsor_invitation_letter.sponsor_name", "value": "Hui Chen"},
+                {"source": "sponsor_status_proof.sponsor_name", "value": "Wei Chen"},
+            ],
+            "missing_context": "",
+            "source_refs": ["caseworker_guidance:7_5"],
+        }
+
+        self.assertEqual(
+            case_analysis.validate_observation(candidate, facts)[1],
+            "consistent_evidence refs do not contain equal values")
+
     def test_email_model_delegates_whole_case_analysis_to_client(self):
         cl = load()
         _, case = make_case(evidence=COMPLETE_EVIDENCE)
@@ -1172,6 +1194,33 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         })
 
         self.assertEqual(got[0]["limb"], "funds")
+
+    def test_case_analysis_env_uses_pro_model_without_changing_intake_default(self):
+        old_env = dict(os.environ)
+        try:
+            os.environ.clear()
+            os.environ.update({
+                "VISA_AGENT_LLM_API_KEY": "secret",
+                "VISA_AGENT_CASE_ANALYSIS_LLM": "1",
+                "VISA_AGENT_LLM_MODEL": "v4flash",
+            })
+            case_client = email_model.case_analysis_client_from_env()
+            intake_client = email_model.intake_client_from_env()
+
+            self.assertEqual(case_client.model_name, "deepseek-v4-pro")
+            self.assertEqual(case_client.timeout, 60)
+            self.assertEqual(intake_client.model_name, "deepseek-v4-flash")
+
+            os.environ["VISA_AGENT_CASE_ANALYSIS_LLM_MODEL"] = "v4pro"
+            os.environ["VISA_AGENT_CASE_ANALYSIS_LLM_TIMEOUT"] = "75"
+            case_client = email_model.case_analysis_client_from_env()
+            self.assertEqual(
+                case_client.model_name,
+                "deepseek-v4-pro")
+            self.assertEqual(case_client.timeout, 75)
+        finally:
+            os.environ.clear()
+            os.environ.update(old_env)
 
     def test_case_analysis_rejects_bad_dimension_contract(self):
         cl = load()

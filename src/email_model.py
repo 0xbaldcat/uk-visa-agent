@@ -418,12 +418,16 @@ def case_analysis_client_from_env():
     api_key = os.environ.get("VISA_AGENT_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         return None
-    model = os.environ.get("VISA_AGENT_LLM_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "v4flash"
+    model = (
+        os.environ.get("VISA_AGENT_CASE_ANALYSIS_LLM_MODEL") or
+        os.environ.get("DEEPSEEK_CASE_ANALYSIS_MODEL") or
+        "deepseek-v4-pro"
+    )
     model = _normalise_model_name(model)
     base_url = os.environ.get("VISA_AGENT_LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
     return ChatCompletionsCaseAnalysisClient(
         api_key=api_key, model=model, base_url=base_url,
-        timeout=_timeout_from_env())
+        timeout=_case_analysis_timeout_from_env())
 
 
 def _env_enabled(name):
@@ -433,6 +437,18 @@ def _env_enabled(name):
 def _timeout_from_env(default=20):
     try:
         return int(os.environ.get("VISA_AGENT_LLM_TIMEOUT", default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _case_analysis_timeout_from_env(default=60):
+    raw = (
+        os.environ.get("VISA_AGENT_CASE_ANALYSIS_LLM_TIMEOUT") or
+        os.environ.get("DEEPSEEK_CASE_ANALYSIS_TIMEOUT") or
+        os.environ.get("VISA_AGENT_LLM_TIMEOUT")
+    )
+    try:
+        return int(raw) if raw is not None else default
     except (TypeError, ValueError):
         return default
 

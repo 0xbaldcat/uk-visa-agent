@@ -282,6 +282,8 @@ def _validate_consistent_evidence(candidate):
     )
     if not any(term in lowered for term in relationship_terms):
         return False, "consistent_evidence must describe a cited consistency"
+    if not _has_equal_ref_pair(refs):
+        return False, "consistent_evidence refs do not contain equal values"
     broad_clearance_terms = (
         "no issue", "no issues", "no problem", "no problems", "case is",
         "application is", "ready to submit", "complete", "all requirements",
@@ -289,6 +291,24 @@ def _validate_consistent_evidence(candidate):
     if any(term in lowered for term in broad_clearance_terms):
         return False, "consistent_evidence must not clear the whole case"
     return True, ""
+
+
+def _has_equal_ref_pair(refs):
+    values = [_normalised_ref_value(ref.get("value")) for ref in refs]
+    for idx, value in enumerate(values):
+        for other in values[idx + 1:]:
+            if value and value == other:
+                return True
+    return False
+
+
+def _normalised_ref_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    text = str(value).strip().lower()
+    return re.sub(r"[^a-z0-9]+", "", text)
 
 
 def normalise_observation(candidate):
