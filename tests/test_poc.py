@@ -456,6 +456,26 @@ class TestDeterminism(unittest.TestCase):
         self.assertNotIn("This case is guaranteed", content)
         self.assertIn("analyse_case", [call[0] for call in model.calls])
 
+    def test_zero_model_observations_can_go_to_review_and_final_pack(self):
+        cl = load()
+        st, case = make_case(evidence=COMPLETE_EVIDENCE)
+        case.stage = state.Stage.COLLECTING
+        st.save_case(case)
+        model = CaseAnalysisModel([])
+        eng = engine_mod.Engine(st, cl, model, today=TODAY)
+
+        result = eng._respond(st.get_case("t1"), state.Action("deliver_pack"))
+        saved = st.get_case("t1")
+        subject, body, attachments = admin_panel.customer_notification(
+            cl, saved, "approved_for_final_report", "No adviser follow-up needed.")
+
+        self.assertEqual(saved.stage, state.Stage.HUMAN_REVIEW)
+        self.assertIn("No whole-case observations generated.", result["review_pack"]["content"])
+        self.assertIn("No follow-up questions proposed.", result["review_pack"]["content"])
+        self.assertIn("Adviser review complete", subject)
+        self.assertIn("reviewed materials package", body)
+        self.assertIn("visa-final-review-report.pdf", [a["filename"] for a in attachments])
+
     def test_request_evidence_email_is_formatted_for_email_reading(self):
         cl = load()
         _, case = make_case()
@@ -1051,7 +1071,7 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         model = CaseAnalysisModel([{
             "dimension_id": "cross_record_credibility_and_consistency",
             "limb": "sponsor_consistency",
-            "observation_type": "missing_context",
+            "observation_type": "consistent_evidence",
             "observation": (
                 "The invitation letter sponsor name matches the sponsor status proof name, "
                 "so no follow-up question is proposed for that fact pair."
@@ -1069,9 +1089,34 @@ class TestWholeCaseAnalysis(unittest.TestCase):
 
         self.assertEqual(len(analysis["observations"]), 1)
         self.assertEqual(analysis["observations"][0]["question"], "")
+        self.assertEqual(analysis["observations"][0]["missing_context"], "")
+        self.assertEqual(analysis["observations"][0]["observation_type"], "consistent_evidence")
         self.assertEqual(analysis["follow_up_questions"], [])
         self.assertIn("Suggested question: none", rendered)
         self.assertIn("No follow-up questions proposed.", rendered)
+
+    def test_positive_observation_cannot_clear_whole_case(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        facts = case_analysis.build_fact_context(cl, case)
+        broad = {
+            "dimension_id": "cross_record_credibility_and_consistency",
+            "limb": "sponsor_consistency",
+            "observation_type": "consistent_evidence",
+            "observation": (
+                "The sponsor names match, so the case is complete and has no issues."
+            ),
+            "evidence_refs": [
+                {"source": "sponsor_invitation_letter.sponsor_name", "value": "Hui Chen"},
+                {"source": "sponsor_status_proof.sponsor_name", "value": "Hui Chen"},
+            ],
+            "missing_context": "",
+            "source_refs": ["caseworker_guidance:7_5"],
+        }
+
+        self.assertEqual(
+            case_analysis.validate_observation(broad, facts)[1],
+            "consistent_evidence must not clear the whole case")
 
     def test_email_model_delegates_whole_case_analysis_to_client(self):
         cl = load()

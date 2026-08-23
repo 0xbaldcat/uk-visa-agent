@@ -99,14 +99,13 @@ def analyse(checklist, case, model=None, limit=None, application_date=None, rubr
                 "prohibited_question_actions": rubric.get("prohibited_question_actions", []),
                 "output_contract": rubric.get("output_contract", {}),
                 "time_basis": (rubric.get("meta") or {}).get("time_basis"),
-            }) or []
-            if model_candidates:
-                candidates = model_candidates
-                candidate_source = "model"
+            })
+            candidates = list(model_candidates or [])
+            candidate_source = "model"
         except Exception as exc:
             model_error = str(exc)
             candidates = []
-    if not candidates:
+    if candidate_source != "model" and not candidates:
         candidates = deterministic_candidates(checklist, case, facts)
 
     accepted, rejected = [], []
@@ -229,8 +228,9 @@ def validate_observation(candidate, facts, rubric=None):
         return False, "limb not allowed for dimension: %s" % dimension_id
 
     allowed_types = output_contract.get("allowed_observation_types", [])
-    if candidate.get("observation_type") not in allowed_types:
-        return False, "unknown observation_type: %s" % candidate.get("observation_type")
+    observation_type = candidate.get("observation_type")
+    if observation_type not in allowed_types:
+        return False, "unknown observation_type: %s" % observation_type
 
     text = " ".join(str(candidate.get(key) or "") for key in (
         "observation", "missing_context", "question"))
@@ -238,6 +238,10 @@ def validate_observation(candidate, facts, rubric=None):
     for term in FORBIDDEN_TERMS:
         if term in lowered:
             return False, "forbidden outcome or sufficiency language: %s" % term
+    if observation_type == "consistent_evidence":
+        ok, reason = _validate_consistent_evidence(candidate)
+        if not ok:
+            return False, reason
     refs = candidate.get("evidence_refs") or []
     if not refs:
         return False, "missing evidence_refs"
@@ -260,6 +264,30 @@ def validate_observation(candidate, facts, rubric=None):
         bad_window = _unsupported_time_window(candidate.get("question", ""), candidate, dimension)
         if bad_window:
             return False, "unsupported time window: %s" % bad_window
+    return True, ""
+
+
+def _validate_consistent_evidence(candidate):
+    if candidate.get("question"):
+        return False, "consistent_evidence must not include a question"
+    if candidate.get("missing_context"):
+        return False, "consistent_evidence must not include missing_context"
+    refs = candidate.get("evidence_refs") or []
+    if len(refs) < 2:
+        return False, "consistent_evidence requires at least two evidence_refs"
+    lowered = str(candidate.get("observation") or "").lower()
+    relationship_terms = (
+        "match", "matches", "matched", "consistent", "align", "aligns",
+        "same", "correspond", "corresponds", "相互印证", "一致"
+    )
+    if not any(term in lowered for term in relationship_terms):
+        return False, "consistent_evidence must describe a cited consistency"
+    broad_clearance_terms = (
+        "no issue", "no issues", "no problem", "no problems", "case is",
+        "application is", "ready to submit", "complete", "all requirements",
+    )
+    if any(term in lowered for term in broad_clearance_terms):
+        return False, "consistent_evidence must not clear the whole case"
     return True, ""
 
 

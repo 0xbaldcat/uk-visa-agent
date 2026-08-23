@@ -379,7 +379,7 @@ def _case_analysis_messages(context):
                     "observation_type": "one of output_contract.allowed_observation_types",
                     "observation": "evidence-backed adviser review note",
                     "evidence_refs": [{"source": "fact key", "value": "exact fact value"}],
-                    "missing_context": "what context the adviser may need",
+                    "missing_context": "optional; omit or empty for a positive consistency observation",
                     "question": "optional client-facing follow-up question; omit or empty if none",
                     "source_refs": ["one or more refs copied from selected dimension.source_refs"],
                 }]

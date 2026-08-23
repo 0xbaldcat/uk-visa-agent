@@ -310,9 +310,10 @@ output_contract:
     - observation_type
     - observation
     - evidence_refs
+    - source_refs
+  optional_fields:
     - missing_context
     - question
-    - source_refs
   allowed_observation_types:
     - contradiction
     - missing_context
@@ -320,6 +321,12 @@ output_contract:
     - purpose_duration_alignment
     - travel_pattern_context
     - sponsor_support_context
+    - consistent_evidence
+  positive_observation_contract: >-
+    consistent_evidence is only for narrow, cited relationships where two or more
+    supplied facts match or align. It must not include missing_context or a
+    question, and must not imply the whole case is complete, strong, sufficient
+    or likely to succeed.
   evidence_ref_contract:
     source: must exactly match a fact-ledger key
     value: must exactly match that fact-ledger value
