@@ -1045,6 +1045,34 @@ class TestWholeCaseAnalysis(unittest.TestCase):
             "cross_record_credibility_and_consistency",
         ])
 
+    def test_positive_observation_can_have_no_follow_up_question(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        model = CaseAnalysisModel([{
+            "dimension_id": "cross_record_credibility_and_consistency",
+            "limb": "sponsor_consistency",
+            "observation_type": "missing_context",
+            "observation": (
+                "The invitation letter sponsor name matches the sponsor status proof name, "
+                "so no follow-up question is proposed for that fact pair."
+            ),
+            "evidence_refs": [
+                {"source": "sponsor_invitation_letter.sponsor_name", "value": "Hui Chen"},
+                {"source": "sponsor_status_proof.sponsor_name", "value": "Hui Chen"},
+            ],
+            "missing_context": "",
+            "source_refs": ["caseworker_guidance:7_5"],
+        }])
+
+        analysis = case_analysis.analyse(cl, case, model=model)
+        rendered = deliver.render_whole_case_analysis(analysis)
+
+        self.assertEqual(len(analysis["observations"]), 1)
+        self.assertEqual(analysis["observations"][0]["question"], "")
+        self.assertEqual(analysis["follow_up_questions"], [])
+        self.assertIn("Suggested question: none", rendered)
+        self.assertIn("No follow-up questions proposed.", rendered)
+
     def test_email_model_delegates_whole_case_analysis_to_client(self):
         cl = load()
         _, case = make_case(evidence=COMPLETE_EVIDENCE)

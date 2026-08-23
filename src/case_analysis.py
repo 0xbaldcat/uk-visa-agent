@@ -121,9 +121,10 @@ def analyse(checklist, case, model=None, limit=None, application_date=None, rubr
     return {
         "facts": facts,
         "observations": accepted,
+        "follow_up_questions": follow_up_questions(accepted),
         "rejected": rejected,
         "limits": [
-            "Whole-case analysis surfaces evidence-backed questions for adviser review.",
+            "Whole-case analysis surfaces evidence-backed observations and optional questions for adviser review.",
             "It does not predict an outcome, score the case, or decide sufficiency.",
             "Each observation must cite facts already present in the case record.",
         ],
@@ -252,14 +253,13 @@ def validate_observation(candidate, facts, rubric=None):
     allowed_source_refs = set(_source_ref_strings(dimension.get("source_refs") or []))
     if not any(str(ref) in allowed_source_refs for ref in source_refs):
         return False, "source_ref not allowed for dimension: %s" % dimension_id
-    if not candidate.get("question"):
-        return False, "missing follow-up question"
-    bad_action = _prohibited_question_action(candidate.get("question", ""), rubric)
-    if bad_action:
-        return False, "prohibited question action: %s" % bad_action
-    bad_window = _unsupported_time_window(candidate.get("question", ""), candidate, dimension)
-    if bad_window:
-        return False, "unsupported time window: %s" % bad_window
+    if candidate.get("question"):
+        bad_action = _prohibited_question_action(candidate.get("question", ""), rubric)
+        if bad_action:
+            return False, "prohibited question action: %s" % bad_action
+        bad_window = _unsupported_time_window(candidate.get("question", ""), candidate, dimension)
+        if bad_window:
+            return False, "unsupported time window: %s" % bad_window
     return True, ""
 
 
@@ -275,6 +275,22 @@ def normalise_observation(candidate):
         "question": " ".join(str(candidate.get("question") or "").split()),
         "source_refs": list(candidate.get("source_refs") or []),
     }
+
+
+def follow_up_questions(observations):
+    questions = []
+    for item in observations:
+        question = item.get("question")
+        if not question:
+            continue
+        questions.append({
+            "dimension_id": item.get("dimension_id"),
+            "limb": item.get("limb"),
+            "question": question,
+            "evidence_refs": list(item.get("evidence_refs") or []),
+            "source_refs": list(item.get("source_refs") or []),
+        })
+    return questions
 
 
 def _source_ref_strings(raw_refs):

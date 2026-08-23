@@ -357,7 +357,7 @@ def render_qc_report(doc):
 def render_whole_case_analysis(doc):
     lines = ["# Whole-Case Analysis For Adviser Review", ""]
     lines.append(
-        "These are evidence-backed observations and follow-up questions. They are "
+        "These are evidence-backed observations and optional follow-up questions. They are "
         "not outcome predictions or sufficiency decisions.")
     observations = doc.get("observations") or []
     if not observations:
@@ -367,10 +367,15 @@ def render_whole_case_analysis(doc):
         lines.append("- Observation: %s" % item["observation"])
         if item.get("missing_context"):
             lines.append("- Missing context: %s" % item["missing_context"])
-        lines.append("- Suggested question: %s" % item["question"])
+        if item.get("question"):
+            lines.append("- Suggested question: %s" % item["question"])
+        else:
+            lines.append("- Suggested question: none")
         lines.append("- Evidence refs:")
         for ref in item.get("evidence_refs") or []:
             lines.append("  - %s = %s" % (ref.get("source"), ref.get("value")))
+    if not (doc.get("follow_up_questions") or []):
+        lines.extend(["", "## Follow-Up Questions", "- No follow-up questions proposed."])
     if doc.get("rejected"):
         lines.extend(["", "## Rejected Candidate Observations"])
         for item in doc["rejected"]:

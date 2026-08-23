@@ -350,7 +350,9 @@ def _case_analysis_messages(context):
             "Use the supplied analysis_dimensions as the review rubric; do not add unrelated "
             "dimensions. "
             "Return only a JSON object with an observations array. Each observation must have "
-            "dimension_id, limb, observation, evidence_refs, missing_context, and question. "
+            "dimension_id, limb, observation_type, observation, evidence_refs, missing_context, "
+            "and source_refs. question is optional: include it only when the adviser may need "
+            "to ask the client for more information. "
             "Use only facts supplied by the user message. Each evidence_ref must copy source "
             "and value exactly from fact_list. Do not shorten, rename, translate, or infer fact "
             "sources. For example, use intake.trip_length_days, not trip_length_days. "
@@ -359,8 +361,8 @@ def _case_analysis_messages(context):
             "statements close to the travel date. "
             "Do not invent facts. Do not predict an "
             "outcome, score the case, or say whether the evidence is sufficient or insufficient. "
-            "Prefer at most five concise observations that would help an adviser ask follow-up "
-            "questions.")},
+            "Prefer at most five concise observations. It is valid to return no observations "
+            "or observations without questions when no follow-up is needed.")},
         {"role": "user", "content": json.dumps({
             "allowed_limbs": list(allowed_limbs),
             "time_basis": time_basis,
@@ -378,7 +380,7 @@ def _case_analysis_messages(context):
                     "observation": "evidence-backed adviser review note",
                     "evidence_refs": [{"source": "fact key", "value": "exact fact value"}],
                     "missing_context": "what context the adviser may need",
-                    "question": "client-facing follow-up question",
+                    "question": "optional client-facing follow-up question; omit or empty if none",
                     "source_refs": ["one or more refs copied from selected dimension.source_refs"],
                 }]
             },

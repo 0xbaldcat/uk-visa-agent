@@ -107,6 +107,7 @@ def main():
         "model_error": analysis["model_error"],
         "rejected_count": len(analysis["rejected"]),
         "observations": analysis["observations"],
+        "follow_up_questions": analysis["follow_up_questions"],
         "rejected_reasons": [item["reason"] for item in analysis["rejected"]],
     }, ensure_ascii=False, indent=2, sort_keys=True))
 
