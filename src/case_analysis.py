@@ -5,9 +5,11 @@ outcome engine: it prepares evidence-backed observations and follow-up questions
 for an adviser. Rules compute facts, an optional model may propose observations,
 and code validates every reference before anything reaches the review pack.
 """
+import os
 from typing import Any, Dict, List, Optional
 
 import diagnose
+import yaml
 
 ALLOWED_LIMBS = {
     "will_leave",
@@ -17,62 +19,6 @@ ALLOWED_LIMBS = {
     "sponsor_consistency",
     "travel_history",
 }
-
-ANALYSIS_DIMENSIONS = [
-    {
-        "id": "funds_and_trip",
-        "label": "Funds and trip cost",
-        "limbs": ["funds"],
-        "source_ids": ["appendix_v", "caseworker_guidance"],
-        "instruction": (
-            "Check whether latest available bank statements at application time, "
-            "estimated trip cost, income, fixed costs, and large or recent deposits "
-            "need explanation. Do not ask for statements from future months or near "
-            "the travel date."
-        ),
-    },
-    {
-        "id": "stay_length",
-        "label": "Stay length",
-        "limbs": ["not_live_in_uk", "will_leave"],
-        "source_ids": ["appendix_v", "caseworker_guidance"],
-        "instruction": (
-            "Check whether a long visit is coordinated with work, business, "
-            "accommodation and budget evidence."
-        ),
-    },
-    {
-        "id": "home_country_ties",
-        "label": "Home-country ties",
-        "limbs": ["will_leave"],
-        "source_ids": ["appendix_v", "caseworker_guidance"],
-        "instruction": (
-            "Where there is a settled UK relative, check whether home-country "
-            "work, business, property, family or study evidence answers the "
-            "will-leave concern."
-        ),
-    },
-    {
-        "id": "sponsor_consistency",
-        "label": "Sponsor consistency",
-        "limbs": ["sponsor_consistency", "funds"],
-        "source_ids": ["caseworker_guidance", "supporting_docs"],
-        "instruction": (
-            "Check whether invitation, sponsor status, accommodation, funding "
-            "and relationship facts are consistent."
-        ),
-    },
-    {
-        "id": "travel_pattern",
-        "label": "Travel pattern",
-        "limbs": ["travel_history", "not_live_in_uk"],
-        "source_ids": ["caseworker_guidance"],
-        "instruction": (
-            "Check whether prior compliant travel, previous stays and the current "
-            "planned stay need extra explanation."
-        ),
-    },
-]
 
 FORBIDDEN_TERMS = (
     "approved",
@@ -87,6 +33,8 @@ FORBIDDEN_TERMS = (
     "meets the requirements",
     "does not meet the requirements",
 )
+
+_RUBRIC = None
 
 
 def build_fact_context(checklist, case):
@@ -109,9 +57,32 @@ def build_fact_context(checklist, case):
     return facts
 
 
-def analyse(checklist, case, model=None, limit=5):
-    # type: (Any, Any, Optional[Any], int) -> Dict[str, Any]
+def load_rubric(path=None):
+    global _RUBRIC
+    use_cache = path is None
+    if use_cache and _RUBRIC is not None:
+        return _RUBRIC
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "config", "case_analysis_rubric.yaml")
+    with open(path) as fh:
+        rubric = yaml.safe_load(fh) or {}
+    if use_cache:
+        _RUBRIC = rubric
+    return rubric
+
+
+def analysis_dimensions(rubric=None):
+    return (rubric or load_rubric()).get("dimensions", [])
+
+
+def analyse(checklist, case, model=None, limit=None, application_date=None, rubric=None):
+    # type: (Any, Any, Optional[Any], Optional[int], Optional[Any], Optional[Dict[str, Any]]) -> Dict[str, Any]
+    rubric = rubric or load_rubric()
+    limit = limit or int((rubric.get("meta") or {}).get("max_observations", 5))
     facts = build_fact_context(checklist, case)
+    if application_date is not None:
+        facts["computed.application_date"] = str(application_date)
     candidates = []
     candidate_source = "deterministic_fallback"
     model_error = None
@@ -120,7 +91,13 @@ def analyse(checklist, case, model=None, limit=5):
             model_candidates = model.analyse_case({
                 "facts": facts,
                 "allowed_limbs": sorted(ALLOWED_LIMBS),
-                "analysis_dimensions": ANALYSIS_DIMENSIONS,
+                "rubric": rubric,
+                "analysis_dimensions": analysis_dimensions(rubric),
+                "global_rules": rubric.get("global_rules", []),
+                "allowed_question_actions": rubric.get("allowed_question_actions", []),
+                "prohibited_question_actions": rubric.get("prohibited_question_actions", []),
+                "output_contract": rubric.get("output_contract", {}),
+                "time_basis": (rubric.get("meta") or {}).get("time_basis"),
             }) or []
             if model_candidates:
                 candidates = model_candidates
@@ -133,7 +110,7 @@ def analyse(checklist, case, model=None, limit=5):
 
     accepted, rejected = [], []
     for candidate in candidates:
-        ok, reason = validate_observation(candidate, facts)
+        ok, reason = validate_observation(candidate, facts, rubric=rubric)
         if ok:
             accepted.append(normalise_observation(candidate))
         else:
@@ -151,7 +128,8 @@ def analyse(checklist, case, model=None, limit=5):
         ],
         "candidate_source": candidate_source,
         "model_error": model_error,
-        "analysis_dimensions": ANALYSIS_DIMENSIONS,
+        "analysis_dimensions": analysis_dimensions(rubric),
+        "rubric_meta": rubric.get("meta", {}),
     }
 
 
@@ -161,7 +139,9 @@ def deterministic_candidates(checklist, case, facts):
     stay_days = facts.get("intake.trip_length_days")
     if stay_days and stay_days >= 60:
         out.append({
+            "dimension_id": "purpose_duration_and_activities",
             "limb": "not_live_in_uk",
+            "observation_type": "purpose_duration_alignment",
             "observation": (
                 "The planned visit is long for a visitor case, so the adviser should "
                 "check whether the explanation, work or business arrangements, "
@@ -173,6 +153,7 @@ def deterministic_candidates(checklist, case, facts):
                 "Can you explain why this visit needs to last this long, and what "
                 "work, business or family commitments continue while you are away?"
             ),
+            "source_refs": ["appendix_v:V_4_2_b_to_d", "caseworker_guidance:7_2"],
         })
 
     cost = facts.get("intake.estimated_trip_cost_gbp")
@@ -184,7 +165,9 @@ def deterministic_candidates(checklist, case, facts):
         cost_f, balance_f = None, None
     if cost_f is not None and balance_f is not None and balance_f <= cost_f * 1.5:
         out.append({
+            "dimension_id": "financial_resources_and_trip_cost",
             "limb": "funds",
+            "observation_type": "missing_context",
             "observation": (
                 "The evidenced closing balance is close to the declared trip cost. "
                 "There is no fixed minimum balance, but the adviser may need context "
@@ -199,11 +182,14 @@ def deterministic_candidates(checklist, case, facts):
                 "Can you explain your regular monthly income and major fixed costs, "
                 "and identify any large recent deposits in the bank statement?"
             ),
+            "source_refs": ["appendix_v:V_4_2_e", "caseworker_guidance:8_1"],
         })
 
     if facts.get("intake.has_uk_settled_relative") is True:
         out.append({
+            "dimension_id": "personal_circumstances_and_will_leave",
             "limb": "will_leave",
+            "observation_type": "missing_context",
             "observation": (
                 "The case involves a settled relative in the UK, so the adviser "
                 "should check that home-country ties and the purpose of visit are "
@@ -219,14 +205,31 @@ def deterministic_candidates(checklist, case, facts):
                 "Which home-country commitments are most important to highlight, "
                 "and can you provide documents that evidence them clearly?"
             ),
+            "source_refs": ["appendix_v:V_4_2_a", "caseworker_guidance:7_2"],
         })
     return out
 
 
-def validate_observation(candidate, facts):
-    # type: (Dict[str, Any], Dict[str, Any]) -> (bool, str)
+def validate_observation(candidate, facts, rubric=None):
+    # type: (Dict[str, Any], Dict[str, Any], Optional[Dict[str, Any]]) -> (bool, str)
+    rubric = rubric or load_rubric()
+    dimensions = dict((dim.get("id"), dim) for dim in analysis_dimensions(rubric))
+    output_contract = rubric.get("output_contract", {})
+
+    dimension_id = candidate.get("dimension_id")
+    if dimension_id not in dimensions:
+        return False, "unknown dimension_id: %s" % dimension_id
+    dimension = dimensions[dimension_id]
+
     if candidate.get("limb") not in ALLOWED_LIMBS:
         return False, "unknown limb"
+    if candidate.get("limb") not in (dimension.get("legal_limbs") or []):
+        return False, "limb not allowed for dimension: %s" % dimension_id
+
+    allowed_types = output_contract.get("allowed_observation_types", [])
+    if candidate.get("observation_type") not in allowed_types:
+        return False, "unknown observation_type: %s" % candidate.get("observation_type")
+
     text = " ".join(str(candidate.get(key) or "") for key in (
         "observation", "missing_context", "question"))
     lowered = text.lower()
@@ -242,28 +245,91 @@ def validate_observation(candidate, facts):
             return False, "unknown evidence ref: %s" % source
         if not _same_value(ref.get("value"), facts[source]):
             return False, "evidence ref value mismatch: %s" % source
+    source_refs = candidate.get("source_refs") or []
+    if not source_refs:
+        return False, "missing source_refs"
+    allowed_source_refs = set(_source_ref_strings(dimension.get("source_refs") or []))
+    if not any(str(ref) in allowed_source_refs for ref in source_refs):
+        return False, "source_ref not allowed for dimension: %s" % dimension_id
     if not candidate.get("question"):
         return False, "missing follow-up question"
+    bad_action = _prohibited_question_action(candidate.get("question", ""), rubric)
+    if bad_action:
+        return False, "prohibited question action: %s" % bad_action
     return True, ""
 
 
 def normalise_observation(candidate):
     # type: (Dict[str, Any]) -> Dict[str, Any]
     return {
+        "dimension_id": candidate["dimension_id"],
         "limb": candidate["limb"],
+        "observation_type": candidate["observation_type"],
         "observation": " ".join(str(candidate.get("observation") or "").split()),
         "evidence_refs": list(candidate.get("evidence_refs") or []),
         "missing_context": " ".join(str(candidate.get("missing_context") or "").split()),
         "question": " ".join(str(candidate.get("question") or "").split()),
+        "source_refs": list(candidate.get("source_refs") or []),
     }
+
+
+def _source_ref_strings(raw_refs):
+    out = []
+    for ref in raw_refs:
+        if isinstance(ref, dict):
+            for key, value in ref.items():
+                out.append("%s:%s" % (key, value))
+        else:
+            out.append(str(ref))
+    return out
+
+
+def _prohibited_question_action(question, rubric):
+    lowered = str(question or "").lower()
+    checks = [
+        ("future-dated bank statement", ["future", "bank statement"]),
+        ("future-month statement", ["future month", "statement"]),
+        ("near-departure statement", ["statement", "departure"]),
+        ("close-to-travel statement", ["statement", "close to", "travel"]),
+        ("31-day visitor rule", ["31 day"]),
+        ("six-month mandatory statement rule", ["six months", "must"]),
+        ("minimum balance", ["minimum balance"]),
+        ("guarantee outcome", ["guarantee"]),
+    ]
+    for label, tokens in checks:
+        if all(token in lowered for token in tokens):
+            return label
+    for action in rubric.get("prohibited_question_actions", []):
+        if "future-dated bank statement" in action and (
+                "future-dated bank statement" in lowered or
+                ("future" in lowered and "statement" in lowered)):
+            return action
+        if "future month" in action and "future month" in lowered:
+            return action
+        if "close to the travel date" in action and (
+                "close to the travel date" in lowered or
+                "near departure" in lowered):
+            return action
+    return None
 
 
 def _same_value(left, right):
     if left == right:
         return True
     if isinstance(left, bool) or isinstance(right, bool):
-        return left is right
+        return _as_bool(left) is _as_bool(right)
     try:
         return float(str(left).replace(",", "")) == float(str(right).replace(",", ""))
     except (TypeError, ValueError):
         return str(left) == str(right)
+
+
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    lowered = str(value).strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    return object()

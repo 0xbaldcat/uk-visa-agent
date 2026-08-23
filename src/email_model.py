@@ -338,6 +338,11 @@ def _case_analysis_messages(context):
     facts = context.get("facts") or {}
     allowed_limbs = context.get("allowed_limbs") or []
     dimensions = context.get("analysis_dimensions") or []
+    global_rules = context.get("global_rules") or []
+    allowed_actions = context.get("allowed_question_actions") or []
+    prohibited_actions = context.get("prohibited_question_actions") or []
+    output_contract = context.get("output_contract") or {}
+    time_basis = context.get("time_basis")
     fact_list = [{"source": key, "value": value} for key, value in sorted(facts.items())]
     return [
         {"role": "system", "content": (
@@ -358,16 +363,23 @@ def _case_analysis_messages(context):
             "questions.")},
         {"role": "user", "content": json.dumps({
             "allowed_limbs": list(allowed_limbs),
+            "time_basis": time_basis,
             "analysis_dimensions": dimensions,
+            "global_rules": global_rules,
+            "allowed_question_actions": allowed_actions,
+            "prohibited_question_actions": prohibited_actions,
+            "output_contract": output_contract,
             "fact_list": fact_list,
             "output_schema": {
                 "observations": [{
                     "dimension_id": "one of analysis_dimensions[].id",
                     "limb": "one of allowed_limbs",
+                    "observation_type": "one of output_contract.allowed_observation_types",
                     "observation": "evidence-backed adviser review note",
                     "evidence_refs": [{"source": "fact key", "value": "exact fact value"}],
                     "missing_context": "what context the adviser may need",
                     "question": "client-facing follow-up question",
+                    "source_refs": ["one or more refs copied from selected dimension.source_refs"],
                 }]
             },
         }, ensure_ascii=False)},

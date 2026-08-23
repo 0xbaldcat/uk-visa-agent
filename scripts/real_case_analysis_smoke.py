@@ -94,6 +94,7 @@ def main():
     print(json.dumps({
         "provider": getattr(model.case_analysis_client, "base_url", None),
         "model": getattr(model.case_analysis_client, "model_name", None),
+        "rubric": analysis["rubric_meta"],
         "accepted_count": len(analysis["observations"]),
         "analysis_dimensions": analysis["analysis_dimensions"],
         "candidate_source": analysis["candidate_source"],

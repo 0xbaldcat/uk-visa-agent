@@ -422,7 +422,9 @@ class TestDeterminism(unittest.TestCase):
         st.save_case(case)
         model = CaseAnalysisModel([
             {
+                "dimension_id": "financial_resources_and_trip_cost",
                 "limb": "funds",
+                "observation_type": "missing_context",
                 "observation": "Trip cost should be reviewed against the evidenced balance.",
                 "evidence_refs": [
                     {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
@@ -430,12 +432,16 @@ class TestDeterminism(unittest.TestCase):
                 ],
                 "missing_context": "Monthly fixed costs.",
                 "question": "Can you explain regular income and fixed monthly costs?",
+                "source_refs": ["appendix_v:V_4_2_e"],
             },
             {
+                "dimension_id": "financial_resources_and_trip_cost",
                 "limb": "funds",
+                "observation_type": "missing_context",
                 "observation": "This case is guaranteed.",
                 "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
                 "question": "ignored",
+                "source_refs": ["appendix_v:V_4_2_e"],
             },
         ])
         eng = engine_mod.Engine(st, cl, model, today=TODAY)
@@ -990,7 +996,9 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         _, case = make_case(evidence=COMPLETE_EVIDENCE)
         model = CaseAnalysisModel([
             {
+                "dimension_id": "financial_resources_and_trip_cost",
                 "limb": "funds",
+                "observation_type": "missing_context",
                 "observation": "Trip cost should be reviewed against the evidenced balance.",
                 "evidence_refs": [
                     {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
@@ -998,18 +1006,25 @@ class TestWholeCaseAnalysis(unittest.TestCase):
                 ],
                 "missing_context": "Monthly fixed costs.",
                 "question": "Can you explain regular income and fixed monthly costs?",
+                "source_refs": ["appendix_v:V_4_2_e"],
             },
             {
+                "dimension_id": "financial_resources_and_trip_cost",
                 "limb": "funds",
+                "observation_type": "missing_context",
                 "observation": "This case is likely to succeed.",
                 "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
                 "question": "ignored",
+                "source_refs": ["appendix_v:V_4_2_e"],
             },
             {
+                "dimension_id": "personal_circumstances_and_will_leave",
                 "limb": "will_leave",
+                "observation_type": "missing_context",
                 "observation": "References a made-up value.",
                 "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "9999"}],
                 "question": "ignored",
+                "source_refs": ["appendix_v:V_4_2_a"],
             },
         ])
 
@@ -1021,15 +1036,21 @@ class TestWholeCaseAnalysis(unittest.TestCase):
         self.assertEqual(model.calls[0][0], "analyse_case")
         self.assertEqual(analysis["candidate_source"], "model")
         self.assertEqual(model.calls[0][2], [
-            "funds_and_trip", "stay_length", "home_country_ties",
-            "sponsor_consistency", "travel_pattern",
+            "purpose_duration_and_activities",
+            "financial_resources_and_trip_cost",
+            "sponsor_relationship_and_support",
+            "personal_circumstances_and_will_leave",
+            "travel_and_immigration_pattern",
+            "cross_record_credibility_and_consistency",
         ])
 
     def test_email_model_delegates_whole_case_analysis_to_client(self):
         cl = load()
         _, case = make_case(evidence=COMPLETE_EVIDENCE)
         client = CaseAnalysisModel([{
+            "dimension_id": "financial_resources_and_trip_cost",
             "limb": "funds",
+            "observation_type": "missing_context",
             "observation": "Trip cost should be reviewed against the evidenced balance.",
             "evidence_refs": [
                 {"source": "intake.estimated_trip_cost_gbp", "value": 4200.0},
@@ -1037,6 +1058,7 @@ class TestWholeCaseAnalysis(unittest.TestCase):
             ],
             "missing_context": "Monthly fixed costs.",
             "question": "Can you explain regular income and fixed monthly costs?",
+            "source_refs": ["appendix_v:V_4_2_e"],
         }])
         model = email_model.EmailDemoModel(case_analysis_client=client)
 
@@ -1052,11 +1074,14 @@ class TestWholeCaseAnalysis(unittest.TestCase):
             api_key="test", model="test-model", base_url="https://example.invalid")
         client._complete_json = lambda messages: {
             "observations": [{
+                "dimension_id": "financial_resources_and_trip_cost",
                 "limb": "funds",
+                "observation_type": "missing_context",
                 "observation": "Trip cost should be reviewed against the evidenced balance.",
                 "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
                 "missing_context": "Monthly fixed costs.",
                 "question": "Can you explain fixed monthly costs?",
+                "source_refs": ["appendix_v:V_4_2_e"],
             }]
         }
 
@@ -1064,15 +1089,45 @@ class TestWholeCaseAnalysis(unittest.TestCase):
             "facts": {"bank_statements.closing_balance": "5100.00"},
             "allowed_limbs": ["funds"],
             "analysis_dimensions": [{
-                "id": "funds_and_trip",
+                "id": "financial_resources_and_trip_cost",
                 "label": "Funds and trip cost",
-                "limbs": ["funds"],
-                "source_ids": ["appendix_v"],
+                "legal_limbs": ["funds"],
+                "source_refs": [{"appendix_v": "V_4_2_e"}],
                 "instruction": "Check funds against trip cost.",
             }],
         })
 
         self.assertEqual(got[0]["limb"], "funds")
+
+    def test_case_analysis_rejects_bad_dimension_contract(self):
+        cl = load()
+        _, case = make_case(evidence=COMPLETE_EVIDENCE)
+        facts = case_analysis.build_fact_context(cl, case)
+        base = {
+            "dimension_id": "financial_resources_and_trip_cost",
+            "limb": "funds",
+            "observation_type": "missing_context",
+            "observation": "Trip cost should be reviewed against the evidenced balance.",
+            "evidence_refs": [{"source": "bank_statements.closing_balance", "value": "5100.00"}],
+            "missing_context": "Monthly fixed costs.",
+            "question": "Can you explain fixed monthly costs?",
+            "source_refs": ["appendix_v:V_4_2_e"],
+        }
+
+        bad_limb = dict(base, limb="travel_history")
+        self.assertEqual(
+            case_analysis.validate_observation(bad_limb, facts)[1],
+            "limb not allowed for dimension: financial_resources_and_trip_cost")
+
+        bad_source = dict(base, source_refs=["caseworker_guidance:7_3"])
+        self.assertEqual(
+            case_analysis.validate_observation(bad_source, facts)[1],
+            "source_ref not allowed for dimension: financial_resources_and_trip_cost")
+
+        bad_question = dict(base, question="Can you provide a future-dated bank statement?")
+        self.assertIn(
+            "prohibited question action",
+            case_analysis.validate_observation(bad_question, facts)[1])
 
     def test_review_pack_includes_whole_case_analysis_layer(self):
         cl = load()

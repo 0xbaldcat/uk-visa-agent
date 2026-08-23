@@ -230,7 +230,8 @@ def build_pack(checklist, case, narrative=None, today=None, model=None):
         "form_answers": form_answers(checklist, case),
         "cover_letter": cover_letter(checklist, case, narrative=narrative),
         "qc_report": qc_report(checklist, case, today=today),
-        "whole_case_analysis": case_analysis.analyse(checklist, case, model=model),
+        "whole_case_analysis": case_analysis.analyse(
+            checklist, case, model=model, application_date=today),
     }
 
 
