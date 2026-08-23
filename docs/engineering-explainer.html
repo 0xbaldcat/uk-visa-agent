@@ -546,24 +546,32 @@
 
       <section id="stability">
         <p class="section-kicker">06 · Reliable AI delivery</p>
-        <h2>AI 交付稳定性：靠控制面，而不是只靠提示词</h2>
-        <p class="muted">我们假设模型可能超时、误读、格式错误或引用不准，因此把失败变成显式状态，而不是让它悄悄进入交付物。</p>
+        <h2>AI 交付稳定性：每次模型调用都被包在可恢复的流程里</h2>
+        <p class="muted">稳定不等于模型永不出错，而是模型超时、漏字段或返回错误格式时，案件仍能继续，并且错误不会悄悄进入材料包。</p>
         <div class="controls">
-          <div class="control"><span class="icon">01</span><div><strong>结构化输出</strong><p>AI 提交正向/风险候选观察和可为空的追问列表；格式不合格就拒绝，不直接写入最终结论。</p></div></div>
-          <div class="control"><span class="icon">02</span><div><strong>事实引用</strong><p>整案观察必须标明依据；引用来源不存在或取值不一致，就不会进入人工复核包。</p></div></div>
-          <div class="control"><span class="icon">03</span><div><strong>规则给出默认值</strong><p>材料要求和机器校验由确定性规则控制；最终组包由顾问在这些默认值上勾选或反选。</p></div></div>
-          <div class="control"><span class="icon">04</span><div><strong>失败关闭</strong><p>附件无法读取、检查器未知或事实不确定时要求补件；系统不会“猜一个答案继续”。</p></div></div>
-          <div class="control"><span class="icon">05</span><div><strong>全链路追溯</strong><p>保存原始输入、抽取结果、校验结果、拒绝原因、人工动作和最终交付版本。</p></div></div>
-          <div class="control"><span class="icon">06</span><div><strong>一次性交接</strong><p>整案观察交给顾问后不再自动重跑；顾问负责后续沟通、补充材料判断和最终选材。</p></div></div>
+          <div class="control"><span class="icon">01</span><div><strong>强制结构化输出</strong><p>模型只能返回约定的字段或观察；不是合法数据对象、字段类型错误或出现范围外字段时，不会直接写入案件。</p></div></div>
+          <div class="control"><span class="icon">02</span><div><strong>逐字段验收</strong><p>输出不是整包全收或全拒。有效字段先保留，错误字段单独拒绝，因此一个字段出错不会丢掉整封邮件中其他有效信息。</p></div></div>
+          <div class="control"><span class="icon">03</span><div><strong>有限纠错重试</strong><p>字段格式不符合要求时，系统把错误原因和目标格式交给模型再修正一次；仍不合格就保留已通过内容，并继续追问缺失信息。</p></div></div>
+          <div class="control"><span class="icon">04</span><div><strong>确定性解析 + LLM 二层兜底</strong><p>邮件由本地解析与 LLM 互补理解；文档先做可复现的字段提取，只把缺失字段交给 LLM。模型失败时，本地结果仍然有效。</p></div></div>
+          <div class="control"><span class="icon">05</span><div><strong>失败隔离与降级</strong><p>模型超时或拒绝时不会打断整个案件：信息理解回到本地解析，整案分析回到固定规则，无法读取的文件则明确要求重发。</p></div></div>
+          <div class="control"><span class="icon">06</span><div><strong>事实与规则二次校验</strong><p>整案观察引用的事实必须真实存在且取值一致；模型自造的金额门槛、时间范围或结果判断会被规则拦截。</p></div></div>
+          <div class="control"><span class="icon">07</span><div><strong>全链路追溯</strong><p>保存模型候选、通过与拒绝内容、校验错误、纠错次数和最终采用结果，能解释一次输出为什么被接受或拦截。</p></div></div>
         </div>
         <div class="proof">
-          <strong>真实 LLM 测试证明护栏在工作：</strong>
-          当前真实测试生成 5 条有事实引用的顾问问题并全部通过；此前模型曾自行加入官方规则没有的“过去十年”时间范围，
-          现已由通用时间窗口校验拦截。这里展示的不是“模型永远正确”，而是“模型出错时系统能抓住”。
+          <strong>实际失败不会中断流程：</strong>
+          客户邮件中即使只有部分字段可识别，系统也会先保存正确部分；文档补提取失败时保留本地解析结果；
+          整案模型不可用时改用固定规则生成顾问复核内容。这里证明的是“错误可控、流程可继续”。
         </div>
         <div class="callout">
-          <strong>零问题也是有效结果：</strong>系统不强迫模型寻找问题。若证据在已检查维度内相互一致，分析可以只给出有依据的正向观察，
-          并返回空的追问列表；顾问复核无异议后直接组包。正向观察不等于成功率预测。
+          <strong>当前 PoC 的取舍：</strong>网络请求失败时直接进入本地兜底，不反复调用外部模型；现有“重试”用于修正不合格的结构化输出。
+          这样两天 PoC 可复现，也不会因为模型服务短暂不可用而卡住演示。
+        </div>
+        <h3>生产环境继续增强</h3>
+        <div class="pack-stack">
+          <div class="pack"><b>短暂故障重试</b>：只对超时、限流和服务端错误做有限次数的退避重试，避免无限重试和重复成本。</div>
+          <div class="pack"><b>模型降级与切换</b>：主模型异常时自动切换备用模型或固定流程，并用熔断保护持续故障的供应商。</div>
+          <div class="pack"><b>持续评测与版本回滚</b>：用固定案例集比较模型、提示词和规则版本；新版本先小流量验证，异常可快速回滚。</div>
+          <div class="pack"><b>稳定性监控</b>：监控格式通过率、纠错率、降级率、人工驳回率和处理时延，超过阈值自动告警。</div>
         </div>
       </section>
 
