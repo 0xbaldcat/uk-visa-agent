@@ -1046,7 +1046,7 @@ class TestAdminPanel(unittest.TestCase):
             self.assertIn("Reviewed by Alex.", html_report["content"])
             self.assertIn("passport-pass.pdf", html_report["content"])
             self.assertTrue(pdf_report["content"].startswith(b"%PDF-1.4"))
-            self.assertIn("bank-fail.pdf", html_report["content"])
+            self.assertNotIn("bank-fail.pdf", html_report["content"])
             self.assertEqual(passport["content"], b"PASSPORT")
             self.assertNotIn("visa-final-review-report.md", filenames)
             self.assertNotIn("bank-fail.pdf", filenames)

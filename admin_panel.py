@@ -326,7 +326,6 @@ def customer_notification(cl, case, decision, note):
 
 def render_client_final_report(cl, case, adviser_note=None):
     accepted = accepted_material_rows(cl, case)
-    _, missing, failing = case.outstanding(cl)
     lines = [
         "# Reviewed Visa Materials Package",
         "",
@@ -353,21 +352,6 @@ def render_client_final_report(cl, case, adviser_note=None):
                     lines.append("  - Note: %s" % advisory)
     else:
         lines.append("- No accepted material files are ready to include yet.")
-    if missing:
-        lines.extend(["", "## Still Missing"])
-        for ev_id in missing:
-            ev = cl.evidence(ev_id) or {"label": ev_id}
-            lines.append("- %s" % ev["label"])
-    if failing:
-        lines.extend(["", "## Not Included: Needs Replacement"])
-        for ev_id in failing:
-            ev = cl.evidence(ev_id) or {"label": ev_id}
-            rec = case.evidence.get(ev_id) or {}
-            filename = os.path.basename(rec.get("document_ref") or "")
-            suffix = " (%s)" % filename if filename else ""
-            lines.append("- %s%s" % (ev["label"], suffix))
-            for failure in case._blocking(rec):
-                lines.append("  - %s" % failure.get("message"))
     lines.extend([
         "",
         "## Limits",
@@ -380,7 +364,6 @@ def render_client_final_report(cl, case, adviser_note=None):
 
 def render_client_final_report_html(cl, case, adviser_note=None):
     accepted = accepted_material_rows(cl, case)
-    _, missing, failing = case.outstanding(cl)
     rows = []
     for item in accepted:
         notes = list(item.get("advisories") or [])
@@ -392,18 +375,6 @@ def render_client_final_report_html(cl, case, adviser_note=None):
                 esc("; ".join(notes) if notes else "Reviewed and accepted")))
     if not rows:
         rows.append("<tr><td colspan=\"4\">No accepted material files are ready to include yet.</td></tr>")
-    missing_items = "".join("<li>%s</li>" % esc((cl.evidence(ev_id) or {"label": ev_id})["label"])
-                            for ev_id in missing)
-    failing_items = []
-    for ev_id in failing:
-        ev = cl.evidence(ev_id) or {"label": ev_id}
-        rec = case.evidence.get(ev_id) or {}
-        filename = os.path.basename(rec.get("document_ref") or "")
-        failures = "; ".join(f.get("message") or "" for f in case._blocking(rec))
-        failing_items.append("<li>%s%s%s</li>" % (
-            esc(ev["label"]),
-            (" - " + esc(filename)) if filename else "",
-            (": " + esc(failures)) if failures else ""))
     adviser = ("<section><h2>Adviser Note</h2><p>%s</p></section>" %
                esc(adviser_note)) if adviser_note else ""
     return """<!doctype html>
@@ -431,8 +402,6 @@ def render_client_final_report_html(cl, case, adviser_note=None):
     <thead><tr><th>Material</th><th>File</th><th>Package status</th><th>Review note</th></tr></thead>
     <tbody>%s</tbody>
   </table>
-  %s
-  %s
   <h2>Limits</h2>
   <ul class="limits">
     <li>This report confirms the listed materials were reviewed for completeness and consistency.</li>
@@ -444,10 +413,7 @@ def render_client_final_report_html(cl, case, adviser_note=None):
 """ % (
         esc(case.slots.get("applicant_name") or "unknown"),
         adviser,
-        "".join(rows),
-        ("<h2>Still Missing</h2><ul>%s</ul>" % missing_items) if missing else "",
-        ("<h2>Not Included: Needs Replacement</h2><ul>%s</ul>" %
-         "".join(failing_items)) if failing else "")
+        "".join(rows))
 
 
 def render_client_final_report_pdf(cl, case, adviser_note=None):
