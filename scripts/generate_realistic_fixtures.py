@@ -48,7 +48,7 @@ def write_text_pdf(path, title, lines):
         commands.extend([
             "%s rg 48 %d 516 20 re f" % (shade, y - 6),
             "0.20 0.24 0.30 rg BT /F1 9 Tf 58 %d Td (%s) Tj ET" % (y, pdf_escape(line)),
-            "0.88 0.90 0.93 RG 48 %d 516 0 l S" % (y - 8),
+            "0.88 0.90 0.93 RG 48 %d m 564 %d l S" % (y - 8, y - 8),
         ])
         y -= 22
     commands.extend([

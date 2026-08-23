@@ -1,0 +1,194 @@
+fixture_version: 1.0.0
+synthetic_data_only: true
+route_id: visitor_family_visit
+application_date: '2026-08-23'
+purpose: Two end-to-end fixture packs that isolate document QC from whole-case analysis.
+  They are deterministic offline fixtures, not visa advice.
+packs:
+- id: no_issue
+  label: No material follow-up identified
+  folder: no-issue
+  zip: no-issue.zip
+  intake_email:
+    subject: Standard Visitor documents - Li Na Wang
+    body: Hello, my name is Li Na Wang and I hold a Chinese passport. I plan to visit
+      London from 10 October 2026 to 30 October 2026 for a family visit with my cousin.
+      My cousin is not British or settled in the UK and I will stay at a hotel. I
+      am employed full-time and will fund the trip myself. The estimated total cost
+      is GBP 2,500. I have not had a UK or other visa refusal. I have attached my
+      documents.
+  slots:
+    applicant_name: Li Na Wang
+    nationality: Chinese
+    trip_start: '2026-10-10'
+    trip_end: '2026-10-30'
+    visit_purpose: family_visit
+    has_uk_settled_relative: false
+    employment_status: employed
+    third_party_funding: false
+    prior_uk_refusal: false
+    estimated_trip_cost_gbp: 2500.0
+  attachments:
+  - evidence_id: passport
+    filename: passport_no_issue_li_na_wang.pdf
+    content_type: application/pdf
+    expected_fields:
+      holder_name: Li Na Wang
+      passport_number: LN2030405
+      expiry_date: '2031-06-30'
+      nationality: Chinese
+      prior_compliant_travel: true
+    expected_blocking_failures: []
+  - evidence_id: bank_statements
+    filename: bank_statements_no_issue_li_na_wang.pdf
+    content_type: application/pdf
+    expected_fields:
+      account_holder_name: Li Na Wang
+      period_start: '2026-02-15'
+      period_end: '2026-08-20'
+      closing_balance: '18500.00'
+      currency: GBP
+    expected_blocking_failures: []
+  - evidence_id: travel_itinerary
+    filename: travel_itinerary_no_issue_li_na_wang.pdf
+    content_type: application/pdf
+    expected_fields:
+      outbound_date: '2026-10-10'
+      return_date: '2026-10-30'
+      passenger_name: Li Na Wang
+    expected_blocking_failures: []
+  - evidence_id: accommodation_proof
+    filename: accommodation_proof_no_issue_li_na_wang.docx
+    content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    expected_fields:
+      address: 22 Southwark Street, London SE1 1TU
+      host_name: Southwark Riverside Hotel
+      stay_start: '2026-10-10'
+      stay_end: '2026-10-30'
+    expected_blocking_failures: []
+  - evidence_id: employment_letter
+    filename: employment_letter_no_issue_li_na_wang.docx
+    content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    expected_fields:
+      employer_name: Shanghai Horizon Technology Co., Ltd.
+      job_title: Senior Product Manager
+      leave_start: '2026-10-09'
+      leave_end: '2026-10-31'
+      annual_salary: CNY 420000
+    expected_blocking_failures: []
+  - evidence_id: home_ties_evidence
+    filename: home_ties_evidence_no_issue_li_na_wang.pdf
+    content_type: application/pdf
+    expected_fields:
+      tie_types: full-time employment; apartment mortgage; spouse and child in Shanghai
+    expected_blocking_failures: []
+  expected_document_qc: all_required_documents_pass
+  expected_deterministic_analysis:
+    candidate_source: deterministic_fallback
+    observation_count: 0
+    follow_up_count: 0
+    dimensions: []
+- id: needs_follow_up
+  label: Adviser follow-up required
+  folder: needs-follow-up
+  zip: needs-follow-up.zip
+  intake_email:
+    subject: Standard Visitor documents - Mei Ling Chen
+    body: Hello, my name is Mei Ling Chen and I hold a Chinese passport. I plan to
+      visit my settled sister Hui Chen in Manchester from 5 October 2026 to 3 January
+      2027. I am self-employed and will pay my own travel and living costs; my sister
+      will provide free accommodation. I estimate the total trip cost at GBP 4,200.
+      I have not had a UK or other visa refusal. I have attached my documents.
+  slots:
+    applicant_name: Mei Ling Chen
+    nationality: Chinese
+    trip_start: '2026-10-05'
+    trip_end: '2027-01-03'
+    visit_purpose: family_visit
+    has_uk_settled_relative: true
+    employment_status: self_employed
+    third_party_funding: false
+    prior_uk_refusal: false
+    estimated_trip_cost_gbp: 4200.0
+  attachments:
+  - evidence_id: passport
+    filename: passport_needs_follow_up_mei_ling_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      holder_name: Mei Ling Chen
+      passport_number: EK1234567
+      expiry_date: '2029-04-30'
+      nationality: Chinese
+      prior_compliant_travel: true
+    expected_blocking_failures: []
+  - evidence_id: bank_statements
+    filename: bank_statements_needs_follow_up_mei_ling_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      account_holder_name: Mei Ling Chen
+      period_start: '2026-02-10'
+      period_end: '2026-08-18'
+      closing_balance: '5100.00'
+      currency: GBP
+    expected_blocking_failures: []
+  - evidence_id: travel_itinerary
+    filename: travel_itinerary_needs_follow_up_mei_ling_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      outbound_date: '2026-10-05'
+      return_date: '2027-01-03'
+      passenger_name: Mei Ling Chen
+    expected_blocking_failures: []
+  - evidence_id: accommodation_proof
+    filename: accommodation_proof_needs_follow_up_mei_ling_chen.docx
+    content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    expected_fields:
+      address: 14 Bramhall Road, Manchester M20 3QT
+      host_name: Hui Chen
+      stay_start: '2026-10-05'
+      stay_end: '2027-01-03'
+    expected_blocking_failures: []
+  - evidence_id: sponsor_invitation_letter
+    filename: sponsor_invitation_letter_needs_follow_up_mei_ling_chen.docx
+    content_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    expected_fields:
+      sponsor_name: Hui Chen
+      sponsor_address: 14 Bramhall Road, Manchester M20 3QT
+      relationship: sister
+      stay_start: '2026-10-05'
+      stay_end: '2027-01-03'
+      funding_offered: accommodation only
+    expected_blocking_failures: []
+  - evidence_id: sponsor_status_proof
+    filename: sponsor_status_proof_needs_follow_up_hui_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      sponsor_name: Hui Chen
+      status_type: Indefinite Leave to Remain
+    expected_blocking_failures: []
+  - evidence_id: self_employment_evidence
+    filename: self_employment_evidence_needs_follow_up_mei_ling_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      business_name: Chen Design Studio
+      registration_id: 91310115MA1K3
+      tax_year: '2025'
+      declared_income: '38000'
+      business_statement_period_start: '2026-02-10'
+      business_statement_period_end: '2026-08-18'
+    expected_blocking_failures: []
+  - evidence_id: home_ties_evidence
+    filename: home_ties_evidence_needs_follow_up_mei_ling_chen.pdf
+    content_type: application/pdf
+    expected_fields:
+      tie_types: apartment mortgage; elderly mother as dependant
+    expected_blocking_failures: []
+  expected_document_qc: all_required_documents_pass
+  expected_deterministic_analysis:
+    candidate_source: deterministic_fallback
+    observation_count: 3
+    follow_up_count: 3
+    dimensions:
+    - purpose_duration_and_activities
+    - financial_resources_and_trip_cost
+    - personal_circumstances_and_will_leave
