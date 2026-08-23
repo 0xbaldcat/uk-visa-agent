@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>英国 visitor 签证材料准备 Agent</title>
+  <title>英国visitor签证材料准备Agent</title>
   <style>
     :root {
       --bg: #f6f7f5;
@@ -63,6 +63,7 @@
       gap: 24px;
       align-items: start;
     }
+    .content { min-width: 0; }
     .toc {
       position: sticky;
       top: 18px;
@@ -203,7 +204,7 @@
     .muted { color: var(--muted); }
     .flow {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
       margin: 16px 0;
     }
@@ -250,7 +251,7 @@
   <header>
     <div class="wrap hero">
       <p class="eyebrow">Engineering explainer · UK visitor visa service agent PoC</p>
-      <h1>英国 visitor 签证材料准备 Agent</h1>
+      <h1>英国visitor签证材料准备Agent</h1>
       <p class="lead">
         这个 PoC 展示一个基于 email / WhatsApp 风格交互的英国访客签材料顾问：
         它采访客户、生成个性化材料清单、接收真实附件、抽取字段、做材料质检、
@@ -295,9 +296,15 @@
         </div>
         <div class="tile">
           <span class="tag">边界</span>
-          <strong>不预测签证结果</strong>
-          系统只确认材料是否存在、字段是否一致、是否能进入包；不判断“够不够强”。
+          <strong>观察风险，不预测结果</strong>
+          系统检查材料并提出有证据引用的整案问题；不输出成功率，也不判断申请是否满足要求。
         </div>
+      </div>
+      <div class="callout warn">
+        <strong>当前实现口径：</strong>现场 demo 的整案观察由确定性 fallback 生成；代码已经预留
+        <code>model.analyse_case(...)</code> 接口和引用校验，但 live model adapter 尚未接入这个方法。
+        fallback 只覆盖长停留、资金接近行程成本、英国定居亲属三类演示启发式，不是法律阈值，
+        也不等于完整整案审查。因此本页会把“当前已运行能力”和“可插拔 AI 能力”分开描述。
       </div>
       <div class="callout">
         签证材料业务的错误代价高度不对称：多问一句只是麻烦，漏材料或编造事实可能导致拒签、
@@ -366,8 +373,8 @@
           </tr>
           <tr>
             <td><code>src/case_analysis.py</code></td>
-            <td>构建整案事实上下文，生成/校验有证据引用的观察和追问。</td>
-            <td>把“顾问式整案关系分析”加入 demo，但仍禁止成功率、强弱评分和无引用判断。</td>
+            <td>构建整案事实上下文，运行确定性观察，并校验可选模型提出的候选观察和引用。</td>
+            <td>把“顾问式整案关系分析”加入 demo；模型接口是可插拔的，当前 live demo 使用 deterministic fallback。</td>
           </tr>
           <tr>
             <td><code>src/deliver.py</code></td>
@@ -386,8 +393,11 @@
   -> Engine.handle_reply / Engine.apply_document
   -> Store(case state + traces)
   -> state.next_action()
-  -> compose response / assemble review pack
-  -> whole-case analysis with evidence refs
+  -> deterministic document validators
+  -> whole-case fact context
+       -> deterministic fallback (current demo)
+       -> optional AI candidates (adapter seam)
+       -> evidence-reference guard
   -> adviser panel
   -> final package to client</code></pre>
     </section>
@@ -395,9 +405,10 @@
     <section id="workflow-agent">
       <h2>4. 为什么不是纯 agent，也不是纯 workflow</h2>
       <p>
-        这个项目的核心取舍是：<strong>workflow 做主干，AI 做受约束的语义分析</strong>。
-        换句话说，workflow 负责流程、硬规则和交付边界；AI 负责理解真实输入、
-        抽取非结构化材料字段，以及在代码验证引用后提出整案观察。
+        这个项目的核心取舍是：<strong>workflow 做主干，AI 只能进入有护栏的能力槽位</strong>。
+        workflow 负责流程、硬规则、事实账本和交付边界；AI 负责理解真实输入、
+        抽取非结构化材料字段。整案分析已经具备可插拔 AI candidate 接口，但当前 demo
+        先用确定性 fallback 产出观察，再用同一套引用护栏验证输出。
       </p>
       <table>
         <thead>
@@ -426,8 +437,8 @@
           </tr>
           <tr>
             <td>整案分析</td>
-            <td>规则 facts + AI candidate + code guard</td>
-            <td>停留时长、资金与行程、英国亲属、国内联系等关系需要语义组合；但每条观察必须引用 case facts，不能输出结论。</td>
+            <td>规则 facts + deterministic fallback + optional AI candidate + code guard</td>
+            <td>当前 demo 稳定展示长停留、资金和国内联系等观察；接入模型后，每条候选仍必须引用 case facts，不能输出结论。</td>
           </tr>
           <tr>
             <td>风险诊断</td>
@@ -495,7 +506,7 @@
           </tr>
           <tr>
             <td>整案分析变成“签证能不能过”的判断</td>
-            <td>只允许 Appendix V 相关 limb 的观察；禁止成功率、强弱评分、sufficiency 语言。</td>
+            <td>只允许预定义分析类别；禁止成功率、强弱评分和 sufficiency 语言。</td>
             <td><code>case_analysis.validate_observation()</code></td>
           </tr>
           <tr>
@@ -583,8 +594,8 @@
             <td>模型网关、超时预算、重试策略、敏感信息 redaction、成本监控、provider fallback。</td>
           </tr>
           <tr>
-            <td>整案分析层是薄版 PoC。</td>
-            <td>建立整案分析评测集、模型版本回归、提示注入防护、adviser 采纳/驳回闭环和责任归属。</td>
+            <td>整案分析层当前使用 deterministic fallback；模型接口尚未接入 live adapter。</td>
+            <td>接入受控模型 adapter，建立整案分析评测集、模型版本回归、提示注入防护、adviser 采纳/驳回闭环和责任归属。</td>
           </tr>
           <tr>
             <td>PDF report 用无依赖简版渲染。</td>
@@ -610,7 +621,8 @@
         <li>展示材料清单来自规则配置，不是模型编的。</li>
         <li>上传一批附件，说明 OCR/LLM 只抽字段，validator 才判断通过/失败。</li>
         <li>展示失败材料补件、重复邮件去重、跨文件重检。</li>
-        <li>展示整案分析：长停留、资金接近行程成本、英国定居亲属等观察都必须带 evidence refs。</li>
+        <li>展示整案分析：当前 fallback 对长停留、资金接近行程成本、英国定居亲属生成观察，并展示 evidence refs。</li>
+        <li>说明可选 LLM candidate 接口已经有引用护栏，但 live model adapter 仍是下一步，不把 seam 当成已上线能力。</li>
         <li>进入 admin panel，说明 human review gate 和 adviser 对整案观察的最终责任。</li>
         <li>approve 后发 final package：PDF/HTML report + accepted 原文件。</li>
         <li>最后讲 production TODO：数据保护、权限、规则 freshness、模型可观测性、人工责任。</li>
