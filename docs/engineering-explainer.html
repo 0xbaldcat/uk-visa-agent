@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UK Visa Agent PoC - Engineering Explainer</title>
+  <style>
+    :root {
+      --bg: #f6f7f5;
+      --ink: #1d2521;
+      --muted: #65706b;
+      --line: #d7ded8;
+      --panel: #ffffff;
+      --accent: #235d4d;
+      --accent-soft: #e6f0eb;
+      --warn: #7a4b00;
+      --warn-soft: #fff5d9;
+      --bad: #923333;
+      --bad-soft: #f8e6e6;
+      --code: #17201c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 28px;
+    }
+    .hero {
+      padding: 48px 0 34px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0;
+      margin: 0 0 8px;
+    }
+    h1 {
+      max-width: 880px;
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+    .lead {
+      max-width: 880px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 18px 0 24px;
+    }
+    nav a {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid #c8ded2;
+      border-radius: 6px;
+      padding: 7px 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    main {
+      padding: 28px 0 64px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 18px 0;
+      padding: 26px;
+    }
+    h2 {
+      font-size: 25px;
+      line-height: 1.24;
+      margin: 0 0 16px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      margin: 26px 0 8px;
+      letter-spacing: 0;
+    }
+    p { margin: 10px 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 7px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 6px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef3ef;
+      font-weight: 700;
+    }
+    code {
+      color: var(--code);
+      background: #eef1ee;
+      border: 1px solid #dde4de;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow: auto;
+      background: #17201c;
+      color: #e8f0ea;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    pre code {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      padding: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0 4px;
+    }
+    .tile {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfb;
+    }
+    .tile strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .warn {
+      background: var(--warn-soft);
+      border-color: #efd690;
+    }
+    .bad {
+      background: var(--bad-soft);
+      border-color: #e6baba;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #f1f7f4;
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 6px;
+    }
+    .muted { color: var(--muted); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .step {
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfb;
+    }
+    .step b {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 5px;
+    }
+    footer {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 0 0 36px;
+    }
+    @media (max-width: 900px) {
+      h1 { font-size: 32px; }
+      .grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+    @media (max-width: 560px) {
+      .wrap { padding: 0 18px; }
+      section { padding: 20px; }
+      .flow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <p class="eyebrow">Engineering explainer · UK visitor visa service agent PoC</p>
+      <h1>用固定 workflow 控制签证材料交付，用 AI 处理真实客户输入</h1>
+      <p class="lead">
+        这个 PoC 展示一个基于 email / WhatsApp 风格交互的英国访客签材料顾问：
+        它采访客户、生成个性化材料清单、接收真实附件、抽取字段、做材料质检、
+        追补失败材料，并在人工复核后把正确材料和 final report 打包给用户。
+      </p>
+      <nav aria-label="Document sections">
+        <a href="#scope">范围</a>
+        <a href="#flow">流程</a>
+        <a href="#architecture">架构</a>
+        <a href="#workflow-agent">Workflow / Agent</a>
+        <a href="#stability">交付稳定性</a>
+        <a href="#data">数据与审计</a>
+        <a href="#production">生产化变化</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="scope">
+      <h2>1. 这个 PoC 做什么，不做什么</h2>
+      <p>
+        范围锁定在 <strong>UK Standard Visitor，探亲访问 + 英国定居亲属场景</strong>。
+        选择这个场景不是因为它最简单，而是因为它能体现顾问价值：客户可能资金刚够、
+        有英国定居亲属、计划停留较久，需要系统主动识别材料缺口和风险因素。
+      </p>
+      <div class="grid">
+        <div class="tile">
+          <span class="tag">做</span>
+          <strong>材料准备闭环</strong>
+          intake、清单、附件收集、OCR/文本抽取、规则校验、补件、人工复核、最终交付包。
+        </div>
+        <div class="tile">
+          <span class="tag">不做</span>
+          <strong>不提交申请</strong>
+          Home Office 没有第三方提交 API；最终提交仍由申请人或人工顾问在官方服务完成。
+        </div>
+        <div class="tile">
+          <span class="tag">边界</span>
+          <strong>不预测签证结果</strong>
+          系统只确认材料是否存在、字段是否一致、是否能进入包；不判断“够不够强”。
+        </div>
+      </div>
+      <div class="callout">
+        签证材料业务的错误代价高度不对称：多问一句只是麻烦，漏材料或编造事实可能导致拒签、
+        费用损失和长期记录。因此核心决策必须可复现、可审计、可关闭失败。
+      </div>
+    </section>
+
+    <section id="flow">
+      <h2>2. 用户体验流程</h2>
+      <p>
+        PoC 的主线不是“聊天”，而是让客户沿着一个稳定的材料交付流程前进。
+        客户可以用自然语言和邮件附件交互，系统内部仍然用状态机控制下一步。
+      </p>
+      <div class="flow">
+        <div class="step"><b>1. 新客户来信</b>无 case id 的第一封邮件自动创建 case。</div>
+        <div class="step"><b>2. Intake</b>自然语言提取姓名、国籍、日期、目的、资金等字段。</div>
+        <div class="step"><b>3. 清单生成</b>根据案情从 YAML 规则映射出必需材料。</div>
+        <div class="step"><b>4. 材料收集</b>客户用邮件发 PDF、DOCX、图片或文本附件。</div>
+        <div class="step"><b>5. 质检补件</b>字段提取后跑代码 validator；失败材料要求重发。</div>
+        <div class="step"><b>6. 人工复核</b>通过材料进入 adviser panel，人工 approve 后发最终包。</div>
+      </div>
+      <h3>最终用户交付物</h3>
+      <ul>
+        <li><code>visa-final-review-report.pdf</code>：用户阅读的主报告。</li>
+        <li><code>visa-final-review-report.html</code>：浏览器可读 fallback。</li>
+        <li>所有 accepted 的原始材料文件。失败材料不会打包，也不会出现在最终报告里。</li>
+      </ul>
+    </section>
+
+    <section id="architecture">
+      <h2>3. 代码架构</h2>
+      <p>
+        当前实现是一个小而完整的后端：SQLite 做状态源，状态机控制流程，YAML 存规则，
+        邮件 poller 接真实邮箱，admin panel 承担人工复核关口。
+      </p>
+      <table>
+        <thead>
+          <tr><th>模块</th><th>责任</th><th>为什么这样拆</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>src/state.py</code></td>
+            <td>纯函数决定下一步 action：ask slot、request evidence、resupply、deliver、human review。</td>
+            <td>流程不能靠对话历史或模型记忆，必须同一 case 得到同一下一步。</td>
+          </tr>
+          <tr>
+            <td><code>src/store.py</code></td>
+            <td>SQLite case、inbound dedupe、outbox、audit、trace、adviser review。</td>
+            <td>多轮邮件会乱序、重复、跨天；数据库是唯一 case state。</td>
+          </tr>
+          <tr>
+            <td><code>src/email_bridge.py</code></td>
+            <td>IMAP 拉取邮件、解析线程、保存附件、映射 evidence id、调用 engine。</td>
+            <td>渠道接入独立于业务逻辑，后续可替换 WhatsApp/其他邮箱。</td>
+          </tr>
+          <tr>
+            <td><code>src/document_extract.py</code></td>
+            <td>从 PDF/DOCX/text/image OCR 文本中提取候选字段。</td>
+            <td>读取材料和判断材料是两件事；读取失败不能假装通过。</td>
+          </tr>
+          <tr>
+            <td><code>src/validate.py</code></td>
+            <td>字段存在、姓名匹配、日期关系、跨材料一致性、advisory 检查。</td>
+            <td>签证材料是否可用由代码判断，不由 LLM 判断。</td>
+          </tr>
+          <tr>
+            <td><code>src/deliver.py</code></td>
+            <td>生成内部 adviser review pack、QC、表格答案草稿、cover note draft。</td>
+            <td>交付物要可复现；模型只允许提供受事实账本约束的 narrative。</td>
+          </tr>
+          <tr>
+            <td><code>admin_panel.py</code></td>
+            <td>本地 adviser review UI，approve/follow-up，并发送最终用户包。</td>
+            <td>PoC 明确保留人工复核，不让 agent 自己签发最终判断。</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>email inbox
+  -> EmailPoller
+  -> Engine.handle_reply / Engine.apply_document
+  -> Store(case state + traces)
+  -> state.next_action()
+  -> compose response / assemble review pack
+  -> adviser panel
+  -> final package to client</code></pre>
+    </section>
+
+    <section id="workflow-agent">
+      <h2>4. 为什么不是纯 agent，也不是纯 workflow</h2>
+      <p>
+        这个项目的核心取舍是：<strong>workflow 做主干，AI 做边缘能力</strong>。
+        换句话说，AI 负责理解和表达，workflow 负责判断和交付。
+      </p>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>采用方式</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>新客户输入 / intake</td>
+            <td>AI + schema</td>
+            <td>客户会把多个事实写在一句话里，也会乱序回答；LLM 适合抽取候选字段。</td>
+          </tr>
+          <tr>
+            <td>清单生成</td>
+            <td>Workflow</td>
+            <td>材料要求来自配置和规则来源，漏一项成本高，不能让模型临场发挥。</td>
+          </tr>
+          <tr>
+            <td>附件字段抽取</td>
+            <td>OCR/解析器 + 可选 AI fallback</td>
+            <td>真实 PDF/图片格式复杂，AI 可帮助读非结构化文本，但只产出候选字段。</td>
+          </tr>
+          <tr>
+            <td>材料是否通过</td>
+            <td>Workflow / code validator</td>
+            <td>姓名、日期、必填字段、跨文件一致性必须可复现。</td>
+          </tr>
+          <tr>
+            <td>风险诊断</td>
+            <td>规则 + 允许的问句</td>
+            <td>可以提示风险因素和追问，但不能输出成功率或充分性结论。</td>
+          </tr>
+          <tr>
+            <td>最终交付</td>
+            <td>Workflow + human gate</td>
+            <td>系统组包，人工顾问 approve；agent 不对真实 visitor test 做最终判断。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        判断标准很简单：输出空间有限、错误不可逆、需要审计的地方用 workflow；
+        输入混乱、表达需要自然语言、错误可被 schema/validator 拦住的地方用 AI。
+      </div>
+    </section>
+
+    <section id="stability">
+      <h2>5. AI 交付稳定性：不是提示词，是控制面</h2>
+      <p>
+        PoC 里所有 AI 输出都先经过结构化边界，不能直接写最终 case state 或最终报告。
+        这里的稳定性不是“模型更聪明”，而是模型失败时系统仍然不编造、不漏件、不静默。
+      </p>
+      <table>
+        <thead>
+          <tr><th>风险</th><th>控制</th><th>当前实现</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>LLM 编造材料要求</td>
+            <td>规则外置，只有 YAML + source id 能定义要求。</td>
+            <td><code>config/visitor_family_visit.yaml</code> + <code>config/sources.yaml</code></td>
+          </tr>
+          <tr>
+            <td>LLM 输出错误 JSON</td>
+            <td>schema coercion，invalid 字段拒绝；最多一次 repair。</td>
+            <td><code>src/ingress.py</code>，trace 写入 <code>ingress_events</code></td>
+          </tr>
+          <tr>
+            <td>模型读不清材料还放行</td>
+            <td>读取失败转为 blocking failure，要求重发。</td>
+            <td><code>Engine.apply_document()</code> 捕获 <code>ModelRefusal</code></td>
+          </tr>
+          <tr>
+            <td>上传顺序导致跨文件漏检</td>
+            <td>每次上传后重检所有已收材料。</td>
+            <td><code>Engine._revalidate_all()</code></td>
+          </tr>
+          <tr>
+            <td>重复邮件重复推进</td>
+            <td>inbound dedupe key。</td>
+            <td><code>inbound</code> table 记录 Message-ID / attachment key</td>
+          </tr>
+          <tr>
+            <td>发信失败不可追踪</td>
+            <td>outbox 先写库，再发送，发送成功后标记。</td>
+            <td><code>outbox</code> table + <code>sent_at</code></td>
+          </tr>
+          <tr>
+            <td>生成文本加入客户没提供过的事实</td>
+            <td>事实账本扫描日期、金额、重要数字。</td>
+            <td><code>src/facts.py</code> 的 <code>FactLedger</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        失败策略是 fail closed：不懂的 validator 报错，不可读材料要求补件，LLM 超时保留已接受字段并继续流程，
+        不让一个模型调用阻断确定性的下一步。
+      </p>
+    </section>
+
+    <section id="data">
+      <h2>6. 数据、审计和最终包</h2>
+      <p>
+        PoC 用 SQLite，而不是把状态藏在 prompt 或聊天记录里。这样现场演示可以直接解释“数据库现在记了什么”，
+        也能说明后续生产化该怎么拆表。
+      </p>
+      <table>
+        <thead>
+          <tr><th>表/字段</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>cases</code></td><td>case id、stage、slots、evidence 聚合快照。</td></tr>
+          <tr><td><code>inbound</code></td><td>入站去重，避免重复邮件重复推进。</td></tr>
+          <tr><td><code>outbox</code></td><td>出站消息审计，避免“以为发了但没发”。</td></tr>
+          <tr><td><code>audit</code></td><td>业务事件流水：case_created、slot_filled、evidence_recorded、pack_assembled。</td></tr>
+          <tr><td><code>ingress_events</code></td><td>LLM intake 候选、接受、拒绝、repair 和 validation errors。</td></tr>
+          <tr><td><code>document_extraction_events</code></td><td>材料 OCR 文本、候选字段、接受字段、拒绝字段。</td></tr>
+          <tr><td><code>validation_events</code></td><td>每条 validator 的 pass/fail 结果。</td></tr>
+          <tr><td><code>adviser_reviews</code></td><td>人工顾问 approve 或要求 follow-up。</td></tr>
+        </tbody>
+      </table>
+      <h3>最终交付包如何避免打包错材料</h3>
+      <ul>
+        <li>只从 <code>case.outstanding(checklist)</code> 的 satisfied set 取材料。</li>
+        <li>只附加 <code>blocking failures = 0</code> 且 <code>document_ref</code> 文件存在的原始附件。</li>
+        <li>失败材料既不作为附件发送，也不出现在用户 final report。</li>
+        <li>报告里只列 included accepted materials，并匹配真实文件名，方便用户核对。</li>
+      </ul>
+    </section>
+
+    <section id="production">
+      <h2>7. PoC 到生产环境会改变什么</h2>
+      <p>
+        PoC 追求两天内可演示、可解释、稳定闭环。生产环境不是简单“把 demo 部署上去”，
+        需要在数据保护、权限、可观测性、规则更新和人工责任上补齐。
+      </p>
+      <table>
+        <thead>
+          <tr><th>PoC 当前做法</th><th>生产化改造</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SQLite 存 case 聚合 JSON。</td>
+            <td>拆成 <code>cases</code>、<code>case_profile</code>、<code>case_evidence</code>、<code>documents</code>、<code>evidence_failures</code> 等表。</td>
+          </tr>
+          <tr>
+            <td>附件保存本地磁盘。</td>
+            <td>对象存储 + 文件 hash + 病毒扫描 + 加密 + 访问审计 + 保留期限。</td>
+          </tr>
+          <tr>
+            <td>本地 admin panel 无认证。</td>
+            <td>正式后台需要登录、RBAC、操作审计、case 分配和 reviewer 身份。</td>
+          </tr>
+          <tr>
+            <td>Gmail app password 做 live demo。</td>
+            <td>生产用正式邮箱/WhatsApp Business API，凭据托管在 secret manager。</td>
+          </tr>
+          <tr>
+            <td>规则 YAML 手工维护。</td>
+            <td>规则版本、effective date、GOV.UK 监控、变更 review 流程。</td>
+          </tr>
+          <tr>
+            <td>LLM fallback 简化。</td>
+            <td>模型网关、超时预算、重试策略、敏感信息 redaction、成本监控、provider fallback。</td>
+          </tr>
+          <tr>
+            <td>PDF report 用无依赖简版渲染。</td>
+            <td>正式 PDF 模板、品牌样式、分页、附件索引、签名/版本号。</td>
+          </tr>
+          <tr>
+            <td>PoC 只覆盖一个访客签探亲 route。</td>
+            <td>多 route 需要独立配置、测试夹具、材料规则和人工审核 SOP。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        生产环境最重要的不是“把模型换成更强的”，而是把责任边界做清楚：
+        哪些内容由系统检查，哪些内容由人工顾问签字，哪些内容必须由申请人确认。
+      </div>
+    </section>
+
+    <section id="runbook">
+      <h2>8. 演示时怎么讲</h2>
+      <ol>
+        <li>先讲业务代价不对称，所以不能让 LLM 自由判断。</li>
+        <li>展示一封新客户邮件如何创建 case，并通过自然语言 intake 填 slots。</li>
+        <li>展示材料清单来自规则配置，不是模型编的。</li>
+        <li>上传一批附件，说明 OCR/LLM 只抽字段，validator 才判断通过/失败。</li>
+        <li>展示失败材料补件、重复邮件去重、跨文件重检。</li>
+        <li>进入 admin panel，说明 human review gate。</li>
+        <li>approve 后发 final package：PDF/HTML report + accepted 原文件。</li>
+        <li>最后讲 production TODO：数据保护、权限、规则 freshness、模型可观测性、人工责任。</li>
+      </ol>
+      <p class="muted">
+        相关工程细节见 <code>DESIGN.md</code>、<code>docs/material-validation-rules.md</code>、
+        <code>docs/attachment-extraction.md</code> 和测试文件 <code>tests/test_poc.py</code>。
+      </p>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    UK Visa Agent PoC · Engineering explainer · Updated 2026-08-23
+  </footer>
+</body>
+</html>

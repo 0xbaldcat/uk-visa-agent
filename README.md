@@ -25,6 +25,7 @@ bounded repair attempt. The trace is recorded in `ingress_events`.
 
 ## Documentation
 
+- [Engineering explainer](docs/engineering-explainer.html)
 - [Research and design](docs/visa-agent-poc-research.md)
 - [Materials checklist](docs/materials-checklist.md)
 - [Material validation rules](docs/material-validation-rules.md)
