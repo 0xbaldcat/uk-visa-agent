@@ -31,6 +31,10 @@ EVIDENCE_IDS = {
     "home_ties_evidence",
 }
 
+IGNORED_SENDER_DOMAINS = {
+    "accounts.google.com",
+}
+
 
 @dataclass
 class ParsedAttachment:
@@ -141,6 +145,9 @@ class EmailPoller(object):
         return results
 
     def apply_email(self, parsed):
+        if is_ignored_sender(parsed.from_addr):
+            return []
+
         case_id = self.resolve_case(parsed)
         if case_id is None:
             return []
@@ -309,3 +316,8 @@ def new_case_id(parsed, now=None):
     seed = "%s:%s:%s" % (parsed.from_addr or "", parsed.message_id or "", parsed.subject or "")
     token = re.sub(r"[^a-z0-9]+", "", str(abs(hash(seed))).lower())[:8]
     return "case_%s_%s" % (now.strftime("%Y%m%d_%H%M%S"), token)
+
+
+def is_ignored_sender(from_addr):
+    domain = (from_addr or "").rsplit("@", 1)[-1].strip().lower()
+    return domain in IGNORED_SENDER_DOMAINS

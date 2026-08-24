@@ -1632,9 +1632,10 @@ class TestRealEmailAdapter(unittest.TestCase):
 class TestEmailBridge(unittest.TestCase):
     def _raw_email(self, message_id="<client-1@example.test>",
                    subject="[visa-agent:t1] Re: documents", body="Attached.",
-                   attachments=None, in_reply_to=None, references=None):
+                   attachments=None, in_reply_to=None, references=None,
+                   from_addr="client@example.test"):
         msg = EmailMessage()
-        msg["From"] = "client@example.test"
+        msg["From"] = from_addr
         msg["To"] = "agent@example.test"
         msg["Subject"] = subject
         msg["Message-ID"] = message_id
@@ -1657,6 +1658,28 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(parsed.message_id, "<client-1@example.test>")
         self.assertEqual(parsed.attachments[0].content, b"PDFDATA")
         self.assertEqual(parsed.attachments[0].evidence_id, "home_ties_evidence")
+
+    def test_google_account_notifications_are_ignored(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        results = poller.poll_raw([self._raw_email(
+            message_id="<security-alert@notifications.google.com>",
+            from_addr="no-reply@accounts.google.com",
+            subject="安全提醒",
+            body="已创建用于登录您账号的应用专用密码")])
+
+        self.assertEqual(results, [])
+        self.assertEqual(sink, [])
+        self.assertEqual(
+            st.conn.execute("select count(*) n from cases").fetchone()["n"], 0)
 
     def test_poll_email_in_human_review_records_reply_and_files_without_auto_response(self):
         cl = load()
