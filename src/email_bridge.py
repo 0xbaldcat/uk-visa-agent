@@ -152,6 +152,7 @@ class EmailPoller(object):
         if case_id is None:
             return []
 
+        self._remember_thread_context(case_id, parsed)
         self._set_thread_context(case_id, parsed)
         case = self.store.get_case(case_id)
         if case and case.stage == state.Stage.HUMAN_REVIEW:
@@ -287,6 +288,16 @@ class EmailPoller(object):
     def _remember_sender(self, sender, case_id):
         if hasattr(self.store, "remember_email_sender"):
             self.store.remember_email_sender(sender, case_id)
+
+    def _remember_thread_context(self, case_id, parsed):
+        if not hasattr(self.store, "remember_email_thread_context"):
+            return
+        references = list(parsed.references)
+        if parsed.in_reply_to and parsed.in_reply_to not in references:
+            references.append(parsed.in_reply_to)
+        self.store.remember_email_thread_context(
+            case_id, parsed.message_id, references=references,
+            subject=parsed.subject, from_addr=parsed.from_addr)
 
     def _set_thread_context(self, case_id, parsed):
         channel = getattr(getattr(self.engine, "router", None), "email", None)

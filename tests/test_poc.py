@@ -1621,6 +1621,10 @@ class TestAdminPanel(unittest.TestCase):
         st.save_case(case)
         st.remember_email_sender("client@example.test", "t1")
         st.remember_email_message("<agent-prev@example.test>", "t1")
+        st.remember_email_thread_context(
+            "t1", "<client-latest@example.test>",
+            references=["<agent-prev@example.test>"],
+            subject="Visa documents", from_addr="client@example.test")
         sent = []
 
         class FakeSmtp(object):
@@ -1663,8 +1667,10 @@ class TestAdminPanel(unittest.TestCase):
         latest = st.latest_adviser_notification("t1")
         body = sent[0].get_body(preferencelist=("plain",)).get_content()
         self.assertEqual(status, "sent")
-        self.assertEqual(sent[0]["In-Reply-To"], "<agent-prev@example.test>")
+        self.assertEqual(sent[0]["Subject"], "Re: Visa documents")
+        self.assertEqual(sent[0]["In-Reply-To"], "<client-latest@example.test>")
         self.assertIn("<agent-prev@example.test>", sent[0]["References"])
+        self.assertIn("<client-latest@example.test>", sent[0]["References"])
         self.assertIn("Case ID: t1", body)
         self.assertEqual(st.case_for_email_message(sent[0]["Message-ID"]), "t1")
         self.assertEqual(latest["status"], "sent")
@@ -1776,11 +1782,14 @@ class TestEmailBridge(unittest.TestCase):
 
             messages = st.human_review_messages("t1")
             files = st.human_review_files("t1")
+            thread = st.latest_email_thread_context("t1")
 
             self.assertEqual(results, [])
             self.assertEqual(sink, [])
             self.assertEqual(len(messages), 1)
             self.assertIn("replaces the old one", messages[0]["body"])
+            self.assertEqual(thread["message_id"], "<human-review-reply@example.test>")
+            self.assertEqual(thread["subject"], "[visa-agent:t1] Re: documents")
             self.assertEqual(len(files), 1)
             self.assertEqual(files[0]["filename"], "replacement_bank.pdf")
             self.assertTrue(os.path.exists(files[0]["document_ref"]))

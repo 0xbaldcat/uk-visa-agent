@@ -330,11 +330,16 @@ def notify_client(st, cl, case_id, review_id, decision, note, selected_tokens=No
         return "skipped"
     try:
         settings = load_email_settings(to_addr)
-        prior_message_id = st.latest_email_message_for_case(case_id)
+        thread = latest_thread_context(st, case_id)
+        prior_message_id = (thread or {}).get("message_id") or st.latest_email_message_for_case(case_id)
+        references = list((thread or {}).get("references") or [])
+        if prior_message_id and prior_message_id not in references:
+            references.append(prior_message_id)
+        subject = reply_subject((thread or {}).get("subject")) or subject
         msg = real_email.build_message(
             settings, subject, body, attachments=attachments,
             in_reply_to=prior_message_id,
-            references=([prior_message_id] if prior_message_id else None))
+            references=references if references else None)
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
             if settings.use_tls:
                 smtp.starttls()
@@ -350,6 +355,32 @@ def notify_client(st, cl, case_id, review_id, decision, note, selected_tokens=No
             case_id, decision, "failed", review_id=review_id, to_addr=to_addr,
             subject=subject, body=body, error=str(exc))
         return "failed"
+
+
+def latest_thread_context(st, case_id):
+    if hasattr(st, "latest_email_thread_context"):
+        thread = st.latest_email_thread_context(case_id)
+        if thread:
+            return thread
+    if hasattr(st, "human_review_messages"):
+        rows = st.human_review_messages(case_id)
+        for row in rows:
+            if row["raw_message_id"]:
+                return {
+                    "message_id": row["raw_message_id"],
+                    "references": [],
+                    "subject": None,
+                }
+    return None
+
+
+def reply_subject(subject):
+    text = (subject or "").strip()
+    if not text:
+        return None
+    if text.lower().startswith("re:"):
+        return text
+    return "Re: %s" % text
 
 
 def customer_notification(cl, case, decision, note, selected_tokens=None, st=None):

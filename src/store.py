@@ -72,6 +72,16 @@ CREATE TABLE IF NOT EXISTS email_sender_cases (
     PRIMARY KEY (sender, case_id)
 );
 
+CREATE TABLE IF NOT EXISTS email_thread_contexts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    from_addr TEXT,
+    subject TEXT,
+    references_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS ingress_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT NOT NULL,
@@ -514,6 +524,36 @@ class Store(object):
             "ORDER BY rowid DESC LIMIT 1",
             (case_id,)).fetchone()
         return None if row is None else row["message_id"]
+
+    def remember_email_thread_context(self, case_id, message_id, references=None,
+                                      subject=None, from_addr=None):
+        if not case_id or not message_id:
+            return
+        unique_refs = []
+        for ref in references or []:
+            if ref and ref not in unique_refs:
+                unique_refs.append(ref)
+        self.conn.execute(
+            "INSERT INTO email_thread_contexts "
+            "(case_id, message_id, from_addr, subject, references_json) "
+            "VALUES (?,?,?,?,?)",
+            (case_id, message_id, from_addr, subject, json.dumps(unique_refs)))
+        self.conn.commit()
+
+    def latest_email_thread_context(self, case_id):
+        row = self.conn.execute(
+            "SELECT * FROM email_thread_contexts WHERE case_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (case_id,)).fetchone()
+        if not row:
+            return None
+        return {
+            "message_id": row["message_id"],
+            "from_addr": row["from_addr"],
+            "subject": row["subject"],
+            "references": json.loads(row["references_json"] or "[]"),
+            "created_at": row["created_at"],
+        }
 
     def remember_email_sender(self, sender, case_id):
         if not sender:
