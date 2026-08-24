@@ -4,6 +4,7 @@ These are not coverage tests. Each one pins a property that, if it broke, would
 let the system do the specific harmful thing the architecture exists to prevent.
 """
 import json
+import io
 import os
 import subprocess
 import sys
@@ -473,8 +474,11 @@ class TestDeterminism(unittest.TestCase):
         self.assertIn("No whole-case observations generated.", result["review_pack"]["content"])
         self.assertIn("No follow-up questions proposed.", result["review_pack"]["content"])
         self.assertIn("Adviser review complete", subject)
-        self.assertIn("reviewed materials package", body)
-        self.assertIn("visa-final-review-report.pdf", [a["filename"] for a in attachments])
+        self.assertIn("zip package", body)
+        self.assertEqual(["visa-reviewed-materials-package.zip"],
+                         [a["filename"] for a in attachments])
+        with zipfile.ZipFile(io.BytesIO(attachments[0]["content"])) as archive:
+            self.assertIn("visa-final-review-report.pdf", archive.namelist())
 
     def test_request_evidence_email_is_formatted_for_email_reading(self):
         cl = load()
@@ -1570,29 +1574,38 @@ class TestAdminPanel(unittest.TestCase):
             subject, body, attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.")
             filenames = [a["filename"] for a in attachments]
-            pdf_report = next(a for a in attachments
-                              if a["filename"] == "visa-final-review-report.pdf")
-            passport = next(a for a in attachments
-                            if a["filename"] == "passport-pass.pdf")
+            package = attachments[0]
+            with zipfile.ZipFile(io.BytesIO(package["content"])) as archive:
+                names = archive.namelist()
+                pdf_report = archive.read("visa-final-review-report.pdf")
+                passport = archive.read("materials/passport-pass.pdf")
             self.assertIn("Adviser review complete", subject)
-            self.assertIn("reviewed materials package", body)
-            self.assertTrue(pdf_report["content"].startswith(b"%PDF-1.4"))
-            self.assertEqual(passport["content"], b"PASSPORT")
+            self.assertIn("zip package", body)
+            self.assertEqual(filenames, ["visa-reviewed-materials-package.zip"])
+            self.assertEqual(package["content_type"], "application/zip")
+            self.assertTrue(pdf_report.startswith(b"%PDF-1.4"))
+            self.assertEqual(passport, b"PASSPORT")
+            self.assertIn("visa-final-review-report.pdf", names)
+            self.assertIn("materials/passport-pass.pdf", names)
             self.assertNotIn("visa-final-review-report.md", filenames)
             self.assertNotIn("visa-final-review-report.html", filenames)
-            self.assertNotIn("bank-fail.pdf", filenames)
+            self.assertNotIn("materials/bank-fail.pdf", names)
 
             selected_subject, _, selected_attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.",
                 selected_tokens=["review_file:%s" % file_id], st=st)
             selected_filenames = [a["filename"] for a in selected_attachments]
-            replacement = next(a for a in selected_attachments
-                               if a["filename"] == "replacement-bank.pdf")
+            selected_package = selected_attachments[0]
+            with zipfile.ZipFile(io.BytesIO(selected_package["content"])) as archive:
+                selected_names = archive.namelist()
+                replacement = archive.read("materials/replacement-bank.pdf")
             self.assertIn("Adviser review complete", selected_subject)
-            self.assertEqual(replacement["content"], b"REPLACEMENT")
-            self.assertIn("visa-final-review-report.pdf", selected_filenames)
+            self.assertEqual(selected_filenames, ["visa-reviewed-materials-package.zip"])
+            self.assertEqual(replacement, b"REPLACEMENT")
+            self.assertIn("visa-final-review-report.pdf", selected_names)
+            self.assertIn("materials/replacement-bank.pdf", selected_names)
             self.assertNotIn("visa-final-review-report.html", selected_filenames)
-            self.assertNotIn("passport-pass.pdf", selected_filenames)
+            self.assertNotIn("materials/passport-pass.pdf", selected_names)
 
         subject, body, attachments = admin_panel.customer_notification(
             cl, case, "needs_client_follow_up", "Please resend the bank statement.")

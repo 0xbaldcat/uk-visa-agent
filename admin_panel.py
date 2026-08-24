@@ -7,6 +7,7 @@ pack, and persist the adviser's decision.
 """
 import argparse
 import html
+import io
 import mimetypes
 import os
 import re
@@ -14,6 +15,7 @@ import shlex
 import smtplib
 import sys
 import urllib.parse
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -389,19 +391,19 @@ def customer_notification(cl, case, decision, note, selected_tokens=None, st=Non
         body = (
             "Your materials have been reviewed by an adviser.\n\n"
             "Case ID: %s\n\n"
-            "I've attached the reviewed materials package for this stage. Please "
+            "I've attached a zip package with the final report and reviewed "
+            "material files for this stage. Please "
             "read the report and tell us if any factual detail or filename is "
             "wrong before you use it.\n\n"
             "This service does not submit the visa application for you."
         ) % case.id
         selected_rows = selected_material_rows(cl, case, selected_tokens, st=st)
         attachments = [{
-            "filename": "visa-final-review-report.pdf",
-            "content_type": "application/pdf",
-            "content": render_client_final_report_pdf(
+            "filename": "visa-reviewed-materials-package.zip",
+            "content_type": "application/zip",
+            "content": final_package_zip(
                 cl, case, note, selected_rows=selected_rows),
         }]
-        attachments.extend(material_attachments(selected_rows))
         return subject, body, attachments
     subject = "[visa-agent:%s] Adviser follow-up needed" % case.id
     follow_up = note or "The adviser needs a little more information before final review."
@@ -524,6 +526,44 @@ def render_client_final_report_pdf(cl, case, adviser_note=None, selected_rows=No
             clean = clean[cut:].strip()
         lines.append(clean)
     return simple_text_pdf(lines[:52])
+
+
+def final_package_zip(cl, case, adviser_note=None, selected_rows=None):
+    selected_rows = selected_rows if selected_rows is not None else selected_material_rows(cl, case)
+    report = render_client_final_report_pdf(
+        cl, case, adviser_note=adviser_note, selected_rows=selected_rows)
+    payload = io.BytesIO()
+    used_names = set()
+    with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("visa-final-review-report.pdf", report)
+        used_names.add("visa-final-review-report.pdf")
+        for item in selected_rows:
+            if not item.get("attached"):
+                continue
+            arcname = unique_zip_name(
+                "materials/%s" % safe_zip_filename(item["filename"]), used_names)
+            with open(item["document_ref"], "rb") as fh:
+                archive.writestr(arcname, fh.read())
+            used_names.add(arcname)
+    return payload.getvalue()
+
+
+def safe_zip_filename(filename):
+    name = os.path.basename(filename or "material.bin")
+    name = re.sub(r"[^A-Za-z0-9_. -]+", "_", name).strip(" .")
+    return name or "material.bin"
+
+
+def unique_zip_name(name, used_names):
+    if name not in used_names:
+        return name
+    stem, ext = os.path.splitext(name)
+    counter = 2
+    while True:
+        candidate = "%s-%d%s" % (stem, counter, ext)
+        if candidate not in used_names:
+            return candidate
+        counter += 1
 
 
 def simple_text_pdf(lines):
