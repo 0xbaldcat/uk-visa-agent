@@ -148,6 +148,16 @@ textarea, input[type=text] {
   padding: 10px 0;
 }
 .timeline-item:first-child { border-top: 0; }
+.analysis-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fbfbf9;
+}
+.analysis-card h3 { margin-top: 0; }
+.analysis-card ul { margin: 8px 0 0; padding-left: 18px; }
+.analysis-card li { margin: 4px 0; }
 .actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 .notice {
   border: 1px solid #bdd6ca;
@@ -227,6 +237,10 @@ def selected_case_id(st, query):
 def review_pack(cl, case):
     pack = deliver.build_pack(cl, case)
     return deliver.render_pack_attachments(pack)[0]["content"]
+
+
+def review_pack_data(cl, case):
+    return deliver.build_pack(cl, case)
 
 
 def client_email_for_case(st, case_id):
@@ -678,7 +692,10 @@ def render_case(st, cl, case_id, query=None):
     notification = st.latest_adviser_notification(case_id)
     review_messages = st.human_review_messages(case_id) if hasattr(st, "human_review_messages") else []
     review_files = st.human_review_files(case_id) if hasattr(st, "human_review_files") else []
-    pack = review_pack(cl, case)
+    pack_data = review_pack_data(cl, case)
+    pack = deliver.render_pack_attachments(pack_data)[0]["content"]
+    whole_case_html = render_whole_case_analysis_section(
+        pack_data.get("whole_case_analysis") or {})
     rows = []
     for ev in cl.required_evidence(case.slots):
         rec = case.evidence.get(ev["id"])
@@ -778,6 +795,9 @@ def render_case(st, cl, case_id, query=None):
   <h2>Review History</h2>
   <table><thead><tr><th>Time</th><th>Decision</th><th>Reviewer</th><th>Note</th></tr></thead><tbody>{history_rows}</tbody></table>
 
+  <h2>Whole-Case Analysis</h2>
+  {whole_case_html}
+
   <h2>Intake Facts</h2>
   <table>{slot_rows}</table>
 
@@ -804,12 +824,56 @@ def render_case(st, cl, case_id, query=None):
         review_html=review_html,
         notification_html=notification_html,
         history_rows=history_rows,
+        whole_case_html=whole_case_html,
         material_html=material_html,
         slot_rows=slot_rows,
         rows="".join(rows),
         review_message_rows=review_message_rows,
         review_file_rows=review_file_rows,
         pack=esc(pack))
+
+
+def render_whole_case_analysis_section(doc):
+    observations = doc.get("observations") or []
+    follow_ups = doc.get("follow_up_questions") or []
+    meta = (
+        '<div class="meta">Evidence-backed adviser notes only. '
+        'Not an outcome prediction or sufficiency decision. '
+        'Observations: {obs} · Follow-up questions: {questions} · Source: {source}</div>'
+        .format(
+            obs=len(observations),
+            questions=len(follow_ups),
+            source=esc(doc.get("candidate_source") or "unknown")))
+    if not observations:
+        return meta + '<div class="analysis-card">No whole-case observations generated.</div>'
+    cards = []
+    for item in observations:
+        refs = "".join(
+            "<li>{source} = {value}</li>".format(
+                source=esc(ref.get("source", "")),
+                value=esc(ref.get("value", "")))
+            for ref in item.get("evidence_refs") or [])
+        if not refs:
+            refs = '<li class="meta">No evidence refs recorded.</li>'
+        question = item.get("question") or "none"
+        missing = item.get("missing_context") or "none"
+        cards.append(
+            '<div class="analysis-card">'
+            '<h3>{limb}</h3>'
+            '<div><b>Observation:</b> {observation}</div>'
+            '<div><b>Missing context:</b> {missing}</div>'
+            '<div><b>Suggested question:</b> {question}</div>'
+            '<div class="meta">Dimension: {dimension} · Type: {kind}</div>'
+            '<ul>{refs}</ul>'
+            '</div>'.format(
+                limb=esc((item.get("limb") or "").replace("_", " ").title()),
+                observation=esc(item.get("observation", "")),
+                missing=esc(missing),
+                question=esc(question),
+                dimension=esc(item.get("dimension_id", "")),
+                kind=esc(item.get("observation_type", "")),
+                refs=refs))
+    return meta + "".join(cards)
 
 
 def render_material_selector(cl, case, st):

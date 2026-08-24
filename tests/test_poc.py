@@ -1347,6 +1347,8 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Needs review", html_body)
         self.assertIn("not reviewed", html_body)
         self.assertIn("Final Package Selection", html_body)
+        self.assertIn("Whole-Case Analysis", html_body)
+        self.assertIn("Observations:", html_body)
         self.assertIn('value="accepted:passport" checked', html_body)
         self.assertIn('value="review_file:1"', html_body)
         self.assertIn("Human Review Client Replies", html_body)
