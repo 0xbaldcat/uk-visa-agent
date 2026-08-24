@@ -541,6 +541,20 @@ def _extract_dates(text):
     for match in re.finditer(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b", text):
         found.append("%04d-%02d-%02d" % (
             int(match.group(3)), int(match.group(2)), int(match.group(1))))
+    months = {
+        "january": 1, "february": 2, "march": 3, "april": 4,
+        "may": 5, "june": 6, "july": 7, "august": 8,
+        "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6,
+        "jul": 7, "aug": 8, "sep": 9, "sept": 9, "oct": 10,
+        "nov": 11, "dec": 12,
+    }
+    month_names = "|".join(sorted(months, key=len, reverse=True))
+    for match in re.finditer(
+            r"\b(\d{1,2})\s+(%s)\s+(20\d{2})\b" % month_names,
+            text, re.IGNORECASE):
+        found.append("%04d-%02d-%02d" % (
+            int(match.group(3)), months[match.group(2).lower()], int(match.group(1))))
     return _dedupe(found)
 
 
@@ -559,6 +573,10 @@ def _extract_visit_purpose(lower):
 
 
 def _extract_uk_relative(lower):
+    if any(phrase in lower for phrase in [
+        "not british or settled", "not settled in the uk", "not british and not settled"
+    ]):
+        return False
     if any(word in lower for word in ["sister in the uk", "brother in the uk", "relative in the uk", "family in the uk", "uk relative"]):
         return True
     if "no relative" in lower or "no family in the uk" in lower:
@@ -581,7 +599,11 @@ def _extract_employment(lower):
 
 
 def _extract_third_party_funding(lower):
-    if any(phrase in lower for phrase in ["self-funded", "self funded", "pay myself", "funding it myself", "i pay"]):
+    if any(phrase in lower for phrase in [
+        "self-funded", "self funded", "pay myself", "funding it myself",
+        "fund myself", "fund the trip myself", "will fund the trip myself",
+        "i will fund", "i pay"
+    ]):
         return False
     if any(phrase in lower for phrase in ["sponsor pays", "paid by", "someone else", "my sister will pay", "my family will pay"]):
         return True

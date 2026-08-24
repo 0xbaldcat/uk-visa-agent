@@ -46,7 +46,7 @@ class Engine(object):
         if action.kind == "ask_slot":
             spec = self.checklist.slot(action.slot)
             try:
-                event = self._parse_intake(text, action)
+                event = self._parse_intake(text, action, case)
                 parsed = event.accepted_json if event else {}
                 if event and hasattr(self.store, "record_ingress_event"):
                     self.store.record_ingress_event(case_id, event.trace(raw_message_id=dedupe_key))
@@ -146,12 +146,16 @@ class Engine(object):
 
     # --- internals ------------------------------------------------------
 
-    def _parse_intake(self, text, action):
+    def _parse_intake(self, text, action, case=None):
         if not (hasattr(self.model, "parse_intake_event")
                 or hasattr(self.model, "parse_intake")):
             return {}
         slots = []
-        for slot_id in action.payload.get("slots") or [action.slot]:
+        if case is not None:
+            slot_ids = [slot["id"] for slot in self.checklist.missing_slots(case.slots)]
+        else:
+            slot_ids = action.payload.get("slots") or [action.slot]
+        for slot_id in slot_ids:
             spec = self.checklist.slot(slot_id)
             if spec:
                 slots.append(spec)

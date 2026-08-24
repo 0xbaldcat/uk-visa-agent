@@ -1897,6 +1897,39 @@ class TestEmailBridge(unittest.TestCase):
         self.assertEqual(st.get_case(case_id).slots["employment_status"], "employed")
         self.assertEqual(st.get_case(case_id).slots["estimated_trip_cost_gbp"], 5000.0)
 
+    def test_first_contact_email_applies_all_supplied_intake_slots(self):
+        cl = load()
+        st = store_mod.Store()
+        sink = []
+        router = channels.Router(
+            channels.WhatsAppChannel(), channels.EmailChannel(sink),
+            preferred_conversation_channel="email")
+        eng = engine_mod.Engine(st, cl, email_model.EmailDemoModel(),
+                                router=router, today=TODAY)
+        poller = email_bridge.EmailPoller(eng, st)
+
+        poller.poll_raw([self._raw_email(
+            message_id="<all-in-one-intake@example.test>",
+            subject="Standard Visitor documents - Li Na Wang",
+            body=("Hello, my name is Li Na Wang and I hold a Chinese passport. "
+                  "I plan to visit London from 10 October 2026 to 30 October 2026 "
+                  "for a family visit with my cousin. My cousin is not British or "
+                  "settled in the UK and I will stay at a hotel. I am employed "
+                  "full-time and will fund the trip myself. The estimated total "
+                  "cost is GBP 2,500."))])
+        case_id = st.conn.execute("select id from cases").fetchone()["id"]
+        case = st.get_case(case_id)
+
+        self.assertEqual(case.slots["applicant_name"], "Li Na Wang")
+        self.assertEqual(case.slots["employment_status"], "employed")
+        self.assertEqual(case.slots["third_party_funding"], False)
+        self.assertEqual(case.slots["estimated_trip_cost_gbp"], 2500.0)
+        self.assertNotIn("prior_uk_refusal", case.slots)
+        self.assertIn("ever been refused", sink[-1]["body"])
+        self.assertNotIn("current work situation", sink[-1]["body"])
+        self.assertNotIn("Is anyone else paying", sink[-1]["body"])
+        self.assertNotIn("whole trip to cost", sink[-1]["body"])
+
     def test_intake_repair_failure_does_not_block_email_response(self):
         cl = load()
         st = store_mod.Store()
