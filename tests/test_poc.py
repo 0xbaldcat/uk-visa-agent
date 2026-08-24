@@ -1357,7 +1357,7 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Internal Review Pack", html_body)
         self.assertIn("Visa Application Review Pack", html_body)
         self.assertIn("Approve for final report", html_body)
-        self.assertIn("Needs client follow-up", html_body)
+        self.assertIn("Send follow-up message", html_body)
         self.assertIn('value="approved_for_final_report">', html_body)
         self.assertIn('value="needs_client_follow_up">', html_body)
         self.assertNotIn('class="secondary"', html_body)

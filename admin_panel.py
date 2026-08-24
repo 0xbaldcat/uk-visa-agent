@@ -925,7 +925,7 @@ def render_case(st, cl, case_id, query=None):
     {material_html}
     <div class="actions">
       <button name="decision" value="approved_for_final_report"{decision_disabled}>Approve for final report with selected files</button>
-      <button name="decision" value="needs_client_follow_up"{decision_disabled}>Needs client follow-up / send message</button>
+      <button name="decision" value="needs_client_follow_up"{decision_disabled}>Send follow-up message</button>
     </div>
     {decision_hint}
   </form>
