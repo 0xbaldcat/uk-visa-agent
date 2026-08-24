@@ -177,7 +177,11 @@ button {
   font-weight: 650;
   cursor: pointer;
 }
-button.secondary { background: #5b6661; }
+button:disabled {
+  background: #aeb6b2;
+  color: #f4f5f3;
+  cursor: not-allowed;
+}
 .empty { color: var(--muted); padding: 20px; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
@@ -332,17 +336,11 @@ def customer_notification(cl, case, decision, note, selected_tokens=None, st=Non
             "This service does not submit the visa application for you."
         ) % case.id
         selected_rows = selected_material_rows(cl, case, selected_tokens, st=st)
-        html_report = render_client_final_report_html(
-            cl, case, note, selected_rows=selected_rows)
         attachments = [{
             "filename": "visa-final-review-report.pdf",
             "content_type": "application/pdf",
             "content": render_client_final_report_pdf(
                 cl, case, note, selected_rows=selected_rows),
-        }, {
-            "filename": "visa-final-review-report.html",
-            "content_type": "text/html",
-            "content": html_report,
         }]
         attachments.extend(material_attachments(selected_rows))
         return subject, body, attachments
@@ -738,6 +736,11 @@ def render_case(st, cl, case_id, query=None):
         if notified:
             text += " · customer notification: %s" % notified
         notice = '<div class="notice">%s</div>' % esc(text)
+    review_locked = review and review["decision"] == "approved_for_final_report"
+    decision_disabled = " disabled" if review_locked else ""
+    decision_hint = (
+        '<div class="meta">This case is already approved. Decision buttons are disabled.</div>'
+        if review_locked else "")
     history = st.conn.execute(
         "SELECT decision, note, reviewer, package_selection, created_at FROM adviser_reviews "
         "WHERE case_id = ? ORDER BY id DESC LIMIT 8", (case_id,)).fetchall()
@@ -787,9 +790,10 @@ def render_case(st, cl, case_id, query=None):
     <div class="meta">Default checked items are machine-validated checklist files. Human-review files are opt-in.</div>
     {material_html}
     <div class="actions">
-      <button name="decision" value="approved_for_final_report">Approve for final report with selected files</button>
-      <button class="secondary" name="decision" value="needs_client_follow_up">Needs client follow-up / send message</button>
+      <button name="decision" value="approved_for_final_report"{decision_disabled}>Approve for final report with selected files</button>
+      <button name="decision" value="needs_client_follow_up"{decision_disabled}>Needs client follow-up / send message</button>
     </div>
+    {decision_hint}
   </form>
 
   <h2>Review History</h2>
@@ -825,6 +829,8 @@ def render_case(st, cl, case_id, query=None):
         notification_html=notification_html,
         history_rows=history_rows,
         whole_case_html=whole_case_html,
+        decision_disabled=decision_disabled,
+        decision_hint=decision_hint,
         material_html=material_html,
         slot_rows=slot_rows,
         rows="".join(rows),

@@ -1344,6 +1344,11 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Visa Application Review Pack", html_body)
         self.assertIn("Approve for final report", html_body)
         self.assertIn("Needs client follow-up", html_body)
+        self.assertIn('value="approved_for_final_report">', html_body)
+        self.assertIn('value="needs_client_follow_up">', html_body)
+        self.assertNotIn('class="secondary"', html_body)
+        self.assertNotIn('name="decision" value="approved_for_final_report" disabled',
+                         html_body)
         self.assertIn("Needs review", html_body)
         self.assertIn("not reviewed", html_body)
         self.assertIn("Final Package Selection", html_body)
@@ -1369,6 +1374,12 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn("Review History", html_body)
         self.assertIn("approved_for_final_report", html_body)
         self.assertIn("Approved", html_body)
+        self.assertIn('name="decision" value="approved_for_final_report" disabled',
+                      html_body)
+        self.assertIn('name="decision" value="needs_client_follow_up" disabled',
+                      html_body)
+        self.assertIn("This case is already approved. Decision buttons are disabled.",
+                      html_body)
 
     def test_admin_panel_case_list_distinguishes_review_states(self):
         cl = load()
@@ -1491,34 +1502,28 @@ class TestAdminPanel(unittest.TestCase):
             subject, body, attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.")
             filenames = [a["filename"] for a in attachments]
-            html_report = next(a for a in attachments
-                               if a["filename"] == "visa-final-review-report.html")
             pdf_report = next(a for a in attachments
                               if a["filename"] == "visa-final-review-report.pdf")
             passport = next(a for a in attachments
                             if a["filename"] == "passport-pass.pdf")
             self.assertIn("Adviser review complete", subject)
             self.assertIn("reviewed materials package", body)
-            self.assertIn("Reviewed by Alex.", html_report["content"])
-            self.assertIn("passport-pass.pdf", html_report["content"])
             self.assertTrue(pdf_report["content"].startswith(b"%PDF-1.4"))
-            self.assertNotIn("bank-fail.pdf", html_report["content"])
             self.assertEqual(passport["content"], b"PASSPORT")
             self.assertNotIn("visa-final-review-report.md", filenames)
+            self.assertNotIn("visa-final-review-report.html", filenames)
             self.assertNotIn("bank-fail.pdf", filenames)
 
             selected_subject, _, selected_attachments = admin_panel.customer_notification(
                 cl, case, "approved_for_final_report", "Reviewed by Alex.",
                 selected_tokens=["review_file:%s" % file_id], st=st)
             selected_filenames = [a["filename"] for a in selected_attachments]
-            selected_html = next(a for a in selected_attachments
-                                 if a["filename"] == "visa-final-review-report.html")
             replacement = next(a for a in selected_attachments
                                if a["filename"] == "replacement-bank.pdf")
             self.assertIn("Adviser review complete", selected_subject)
-            self.assertIn("replacement-bank.pdf", selected_html["content"])
-            self.assertNotIn("passport-pass.pdf", selected_html["content"])
             self.assertEqual(replacement["content"], b"REPLACEMENT")
+            self.assertIn("visa-final-review-report.pdf", selected_filenames)
+            self.assertNotIn("visa-final-review-report.html", selected_filenames)
             self.assertNotIn("passport-pass.pdf", selected_filenames)
 
         subject, body, attachments = admin_panel.customer_notification(
