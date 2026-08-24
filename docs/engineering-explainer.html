@@ -274,9 +274,6 @@
     .pack { padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px; background: white; }
     .pack b { color: var(--green); }
 
-    .highlights { counter-reset: highlight; display: grid; gap: 11px; margin-top: 18px; }
-    .highlight { position: relative; padding: 14px 16px 14px 58px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfb; }
-    .highlight::before { counter-increment: highlight; content: counter(highlight); position: absolute; left: 15px; top: 13px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--green); color: white; font-weight: 850; }
     footer { padding: 0 30px 38px; color: var(--muted); text-align: center; font-size: 13px; }
 
     @media (max-width: 960px) {
@@ -332,7 +329,6 @@
         <a href="#hybrid">Agent / Workflow</a>
         <a href="#stability">AI 交付稳定性</a>
         <a href="#production">生产化与扩展</a>
-        <a href="#demo">面试展示亮点</a>
       </nav>
     </aside>
 
@@ -569,69 +565,28 @@
 
       <section id="production">
         <p class="section-kicker">07 · Production & extensibility</p>
-        <h2>从 PoC 到生产：核心结构保留，治理能力补齐</h2>
-        <div class="evolution">
-          <div class="evolution-panel">
-            <h3>当前 PoC</h3>
-            <ul>
-              <li>覆盖 UK Standard Visitor</li>
-              <li>完整演示探亲 reference scenario</li>
-              <li>Email 真实附件闭环</li>
-              <li>本地顾问 Admin Panel</li>
-              <li>真实 LLM 整案分析路径</li>
-            </ul>
-          </div>
-          <div class="evolution-arrow">→</div>
-          <div class="evolution-panel">
-            <h3>生产环境补齐</h3>
-            <ul>
-              <li>正式 Email / WhatsApp Business 渠道</li>
-              <li>加密存储、病毒扫描、权限与数据保留策略</li>
-              <li>规则来源监控、审批、版本锁定与回滚</li>
-              <li>模型评测、成本监控、降级和供应商切换</li>
-              <li>顾问分案、权限、服务时限与质量反馈闭环</li>
-            </ul>
-          </div>
-        </div>
-
-        <h3>生产环境具体要补齐什么</h3>
+        <h2>从 PoC 到生产：五个真正影响产品能力的升级</h2>
+        <p class="muted">PoC 证明了邮件、真实附件、材料校验、整案分析和人工交付可以形成闭环。生产化不只是把服务部署得更稳定，还要补上开放输入的安全边界、垂直领域的分析深度、长尾问答、质量运营和更多签证类型。</p>
         <div class="pack-stack">
-          <div class="pack"><b>1. 正式的客户沟通渠道</b>：PoC 用单个邮箱跑通收发，WhatsApp 只保留接入位置。生产环境需要正式邮件域名与 WhatsApp Business，处理身份确认、消息模板、发送失败、重复投递和会话归属，确保一条回复始终回到正确案件。</div>
-          <div class="pack"><b>2. 签证材料的数据安全</b>：PoC 把文件保存在本机，适合演示但不适合真实护照和银行流水。生产环境需要加密文件存储、病毒扫描、分角色访问、下载记录、保存期限，以及客户要求导出或删除数据的能力。</div>
-          <div class="pack"><b>3. 可持续运行的案件流程</b>：PoC 由本地进程处理邮件和后台页面，进程停止后需要人工重启。生产环境需要把收件、OCR、模型调用和发信变成可恢复的任务；服务重启后从上一步继续，失败任务可重试或转人工，不重复处理同一封邮件。</div>
-          <div class="pack"><b>4. 规则与 AI 版本治理</b>：PoC 固定一套已验证的规则和模型配置。生产环境需要记录每条规则的官方来源、审核人和生效时间；每个案件锁定自己的版本，新规则或新模型先通过案例测试和小范围验证，再逐步启用，出现问题可以回退。</div>
-          <div class="pack"><b>5. 多顾问协作与质量控制</b>：PoC 由一名顾问在本地后台处理案件。生产环境需要分案、角色权限、处理时限、内部备注、升级与二次复核；所有客户沟通、材料增删和最终打包操作都保留负责人和时间。</div>
-          <div class="pack"><b>6. 安全交付最终材料包</b>：PoC 通过邮件发送最终报告和附件。生产环境更适合生成固定版本的材料包，通过有时效和权限控制的安全链接交付，同时记录客户下载的版本，避免大附件、错发和后续文件被悄悄替换。</div>
-        </div>
+          <div class="pack"><b>1. 为客户文字和文件建立第一层安全防护</b>：生产 Agent 接收的是面向消费者的开放输入，所有邮件、聊天内容和附件都应先被视为不可信数据。客户可能在正文或文档里放入 prompt injection，试图让模型忽略系统规则、泄露其他案件或调用越权工具；附件也可能包含病毒、宏、伪装文件、压缩炸弹、超大文件或恶意 PDF。第一层防护需要把“系统指令”和“客户内容”严格分离，对工具与可访问数据做白名单和案件级权限隔离；上传入口同时检查真实文件类型、大小、页数、加密状态和恶意内容，在隔离环境中完成解压、OCR 与解析。可疑指令不能进入高权限 prompt，可疑文件不进入后续处理，而是隔离并交给人工确认。</div>
 
-        <h3>如何扩充场景和签证类型</h3>
-        <p>生产架构采用“通用引擎 + 可版本化规则包”。新增业务时扩充知识与规则，不重写邮件、OCR、状态管理和人工复核流程。</p>
-        <div class="pack-stack">
-          <div class="pack"><b>签证公共规则包</b>：例如 Standard Visitor 的共用资格维度、基础材料和边界。</div>
-          <div class="pack"><b>访问目的包</b>：旅游、探亲、短期商务分别增加自己的问题、条件材料和交叉核验。</div>
-          <div class="pack"><b>客户画像包</b>：受雇、自雇、学生、退休等身份增加对应的资金与国内联系材料。</div>
-          <div class="pack"><b>新的签证类型包</b>：Student、Skilled Worker 等拥有独立问卷、材料、规则、交付结构和评测集。</div>
+          <div class="pack"><b>2. 把整案分析从单次调用升级为受控的 ReAct / RAG Loop</b>：PoC 由 workflow 一次性准备事实账本、rubric 和输出约束，再调用 LLM 生成候选观察。生产环境资料更多时，可以让整案分析 Agent 先形成假设，再通过只读工具选择性查看相关材料片段、查询最新规则、检索签证服务商的顾问 playbook，并寻找已经匿名化的相似历史案件；拿到新证据后继续验证或修正假设，最后形成有引用的顾问笔记。垂直领域专家经验应被蒸馏为版本化的 rubric、playbook 和案例标签，且明确区分官方规则、顾问经验和本公司的交付标准。Loop 必须限制最大步骤、Token、可用工具和资料范围，只允许读取与检索；它不能直接发邮件、改变案件状态、通过材料或批准最终材料包，输出仍要经过代码校验和人类顾问复核。</div>
+
+          <div class="pack"><b>3. 用 RAG 回答固定流程之外的长尾问题</b>：当前 Agent 擅长围绕 intake、材料清单和补件问题推进案件，但客户可能会问大量不在固定字段里的问题，例如某类访问活动是否允许、翻译件有什么要求、旧护照是否需要提交，或自己的特殊经历应该如何说明。生产环境需要把官方规则与指南、签证服务商审核过的 FAQ 和顾问知识接入 RAG；系统先识别问题属于通用政策、操作流程还是具体案件，再检索与当前签证类型和规则版本匹配的内容。回答必须给出来源和版本；检索不到可靠依据、来源过期或问题需要专业判断时，Agent 应明确转交人工，而不是依靠模型常识补答案。案件数据与公共知识库也必须隔离，避免检索时泄露其他客户信息。</div>
+
+          <div class="pack"><b>4. 建立模型评测、成本监控和整案质量反馈闭环</b>：上线前需要按签证类型建立脱敏的标准案例集，覆盖正常案件、缺材料、跨文件冲突、prompt injection、恶意附件和长尾问题，持续评测字段提取准确率、引用正确率、重要问题召回率、无依据结论率以及顾问是否认为问题有用。线上同时记录每个阶段的模型、prompt、rubric 和检索版本，以及延迟、Token、OCR、检索和单案件成本。顾问对整案观察的“接受、改写、拒绝及原因”，以及最终补了什么材料，应沉淀为带标签的质量反馈；新模型、新 prompt、新 rubric 和新检索策略先离线回放，再小流量验证，指标下降时可以回滚。成本优化也要分任务选择模型、缓存公共知识检索，并给 ReAct Loop 设置明确的步骤和预算上限，而不是无限循环。</div>
+
+          <div class="pack"><b>5. 从 Standard Visitor 扩展到其他签证类型</b>：邮件、附件解析、案件状态、人工复核和审计可以继续作为通用引擎；每一种新签证类型则需要独立、可版本化的业务包，包括 intake 问题、必需与条件材料、字段与跨文件校验、整案 rubric、RAG 知识范围、可用工具、交付模板和评测案例。可以先补齐 Standard Visitor 下的旅游、探亲和短期商务场景，再扩展 Student、Skilled Worker 或 Family 等类型。新业务包不能简单复制访客签规则，必须经过官方来源复核、垂直领域专家审核、正反例测试和人工试运行；每个案件锁定使用的规则与知识版本，后续更新不能悄悄改变历史案件。</div>
         </div>
         <div class="callout amber">
-          新规则包需经过来源复核、正反例测试、影子运行和人工试点后才能启用；每个案件锁定自己的规则版本，更新不会悄悄改变历史案件。
+          生产版可以让整案分析 Agent 更主动地查资料和对比历史案例，但主 workflow 的状态推进、客户外发、材料通过和最终交付仍由代码与人类顾问控制。能力可以变强，责任边界不能变模糊。
         </div>
       </section>
 
-      <section id="demo">
-        <p class="section-kicker">08 · Interview story</p>
-        <h2>面试时最值得展示的五个亮点</h2>
-        <div class="highlights">
-          <div class="highlight"><strong>不是聊天机器人，而是可完成交付的 Agent。</strong>从第一封邮件一直推进到最终报告和材料包。</div>
-          <div class="highlight"><strong>使用真实材料形态。</strong>客户发送 PDF、Word 和图片，系统通过解析与 OCR 处理，不依赖预先整理好的 JSON。</div>
-          <div class="highlight"><strong>AI、Workflow 与人类顾问有清晰交接。</strong>AI 解决输入复杂性，规则约束自动阶段，顾问接管高代价判断和最终选材。</div>
-          <div class="highlight"><strong>能证明 AI 失败不会直接污染交付。</strong>引用不一致的真实模型输出被规则拦截，并保留原因供审计。</div>
-          <div class="highlight"><strong>PoC 不是一次性脚本。</strong>签证公共规则、访问目的和客户画像可以组合，未来扩场景不需要推倒核心流程。</div>
-        </div>
-      </section>
     </div>
   </main>
 
-  <footer>UK Visa Agent PoC · Product & architecture highlights · 2026-08-23</footer>
+  <footer>UK Visa Agent PoC · Product & architecture explainer · 2026-08-23</footer>
   <script>
     const links = Array.from(document.querySelectorAll('.toc a'));
     const sections = links.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
