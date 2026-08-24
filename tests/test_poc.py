@@ -1325,18 +1325,32 @@ class TestDemoScripts(unittest.TestCase):
 class TestAdminPanel(unittest.TestCase):
     def test_admin_panel_renders_human_review_case_and_pack(self):
         cl = load()
-        st, case = make_case(evidence=COMPLETE_EVIDENCE)
-        case.stage = state.Stage.HUMAN_REVIEW
-        st.save_case(case)
-        st.record_human_review_message(
-            "t1", raw_message_id="<client-review@example.test>",
-            from_addr="client@example.test", body="Here is the replacement file.")
-        st.record_human_review_file(
-            "t1", "replacement-bank.pdf", "/tmp/replacement-bank.pdf",
-            raw_message_id="<client-review@example.test>",
-            from_addr="client@example.test", evidence_id="bank_statements")
+        with tempfile.TemporaryDirectory() as td:
+            passport_path = os.path.join(td, "passport-pass.pdf")
+            replacement_path = os.path.join(td, "replacement-bank.pdf")
+            with open(passport_path, "wb") as fh:
+                fh.write(b"PASSPORT")
+            with open(replacement_path, "wb") as fh:
+                fh.write(b"REPLACEMENT")
+            evidence = dict(COMPLETE_EVIDENCE)
+            evidence["passport"] = dict(
+                COMPLETE_EVIDENCE["passport"], document_ref=passport_path)
+            st, case = make_case(evidence=evidence)
+            case.stage = state.Stage.HUMAN_REVIEW
+            st.save_case(case)
+            st.record_human_review_message(
+                "t1", raw_message_id="<client-review@example.test>",
+                from_addr="client@example.test",
+                body=("Here is the replacement file.\n\n"
+                      "It explains the trip plan.\n\n"
+                      "On Mon, 24 Aug 2026 at 18:56, <agent@example.test> wrote:\n"
+                      "> Please send the old requested material."))
+            st.record_human_review_file(
+                "t1", "replacement-bank.pdf", replacement_path,
+                raw_message_id="<client-review@example.test>",
+                from_addr="client@example.test", evidence_id="bank_statements")
 
-        html_body = admin_panel.render_app(st, cl, {"case": ["t1"]})
+            html_body = admin_panel.render_app(st, cl, {"case": ["t1"]})
 
         self.assertIn("Visa Adviser Review", html_body)
         self.assertIn("case-id", html_body)
@@ -1358,7 +1372,61 @@ class TestAdminPanel(unittest.TestCase):
         self.assertIn('value="review_file:1"', html_body)
         self.assertIn("Human Review Client Replies", html_body)
         self.assertIn("Here is the replacement file.", html_body)
+        self.assertIn("It explains the trip plan.", html_body)
+        self.assertNotIn("Please send the old requested material.", html_body)
         self.assertIn("replacement-bank.pdf", html_body)
+        self.assertIn("Preview", html_body)
+        self.assertIn("Download", html_body)
+        self.assertIn(
+            "/file?case=t1&amp;source=accepted&amp;id=passport&amp;mode=preview",
+            html_body)
+        self.assertIn(
+            "/file?case=t1&amp;source=review_file&amp;id=1&amp;mode=download",
+            html_body)
+
+    def test_admin_panel_resolves_case_files_without_raw_paths(self):
+        cl = load()
+        with tempfile.TemporaryDirectory() as td:
+            passport_path = os.path.join(td, "passport-pass.pdf")
+            replacement_path = os.path.join(td, "replacement-bank.pdf")
+            with open(passport_path, "wb") as fh:
+                fh.write(b"PASSPORT")
+            with open(replacement_path, "wb") as fh:
+                fh.write(b"REPLACEMENT")
+            evidence = dict(COMPLETE_EVIDENCE)
+            evidence["passport"] = dict(
+                COMPLETE_EVIDENCE["passport"], document_ref=passport_path)
+            st, case = make_case(evidence=evidence)
+            case.stage = state.Stage.HUMAN_REVIEW
+            st.save_case(case)
+            file_id = st.record_human_review_file(
+                "t1", "replacement-bank.pdf", replacement_path,
+                raw_message_id="<client-review@example.test>",
+                from_addr="client@example.test", evidence_id="bank_statements")
+
+            accepted = admin_panel.resolve_file_request(st, cl, "t1", {
+                "source": ["accepted"], "id": ["passport"]})
+            review_file = admin_panel.resolve_file_request(st, cl, "t1", {
+                "source": ["review_file"], "id": [str(file_id)]})
+            missing = admin_panel.resolve_file_request(st, cl, "t1", {
+                "source": ["accepted"], "id": ["../../../etc/passwd"]})
+
+        self.assertEqual(accepted["path"], passport_path)
+        self.assertEqual(review_file["path"], replacement_path)
+        self.assertIsNone(missing)
+
+    def test_admin_panel_reply_body_strips_quoted_email(self):
+        body = (
+            "Dear Adviser,\r\n\r\n"
+            "Attached is the updated statement.\r\n\r\n"
+            "On Mon, 24 Aug 2026 at 18:56, <agent@example.test> wrote:\r\n"
+            "> Old follow-up request\r\n")
+
+        cleaned = admin_panel.clean_reply_body(body)
+
+        self.assertIn("Attached is the updated statement.", cleaned)
+        self.assertNotIn("Old follow-up request", cleaned)
+        self.assertNotIn("wrote:", cleaned)
 
     def test_admin_panel_shows_saved_decision_feedback(self):
         cl = load()

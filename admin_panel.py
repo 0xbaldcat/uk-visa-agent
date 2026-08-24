@@ -9,6 +9,7 @@ import argparse
 import html
 import mimetypes
 import os
+import re
 import shlex
 import smtplib
 import sys
@@ -148,6 +149,33 @@ textarea, input[type=text] {
   padding: 10px 0;
 }
 .timeline-item:first-child { border-top: 0; }
+.reply-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fbfbf9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 7px;
+}
+.file-name { font-weight: 650; }
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.file-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid #bdd6ca;
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: #f5faf7;
+  font-size: 12px;
+  font-weight: 700;
+}
 .analysis-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -610,6 +638,98 @@ def esc(value):
     return html.escape("" if value is None else str(value), quote=True)
 
 
+def clean_reply_body(body):
+    text = (body or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    before_quote = re.split(r"\nOn .{1,240}?wrote:\s*(?:\n|$)", text, maxsplit=1)
+    text = before_quote[0].strip()
+    lines = []
+    previous_blank = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(">"):
+            continue
+        blank = not line.strip()
+        if blank and previous_blank:
+            continue
+        lines.append(line.rstrip())
+        previous_blank = blank
+    return "\n".join(lines).strip()
+
+
+def file_action_links(case_id, source, identifier, attached=True):
+    if not attached:
+        return '<div class="meta">File not found on disk.</div>'
+    query = urllib.parse.urlencode({
+        "case": case_id,
+        "source": source,
+        "id": identifier,
+        "mode": "preview",
+    })
+    preview = "/file?%s" % query
+    query = urllib.parse.urlencode({
+        "case": case_id,
+        "source": source,
+        "id": identifier,
+        "mode": "download",
+    })
+    download = "/file?%s" % query
+    return (
+        '<div class="file-actions">'
+        '<a href="{preview}" target="_blank" rel="noopener">Preview</a>'
+        '<a href="{download}">Download</a>'
+        '</div>'.format(preview=esc(preview), download=esc(download)))
+
+
+def render_file_cell(filename, document_ref, actions=""):
+    if not document_ref:
+        return '<span class="meta">No file recorded.</span>'
+    return (
+        '<div class="file-name">{filename}</div>'
+        '<div class="meta">{path}</div>{actions}'.format(
+            filename=esc(filename or os.path.basename(document_ref)),
+            path=esc(document_ref),
+            actions=actions))
+
+
+def resolve_file_request(st, cl, case_id, query):
+    case = st.get_case(case_id) if case_id else None
+    if not case:
+        return None
+    source = (query.get("source") or [""])[0]
+    identifier = (query.get("id") or [""])[0]
+    if source == "accepted":
+        rec = case.evidence.get(identifier) or {}
+        document_ref = rec.get("document_ref") or ""
+        evidence = cl.evidence(identifier) or {"label": identifier}
+        filename = os.path.basename(document_ref) if document_ref else evidence["label"]
+        content_type = mimetypes.guess_type(document_ref)[0] or "application/octet-stream"
+    elif source == "review_file":
+        try:
+            file_id = int(identifier)
+        except ValueError:
+            return None
+        row = st.conn.execute(
+            "SELECT filename, content_type, document_ref FROM human_review_files "
+            "WHERE case_id = ? AND id = ?",
+            (case_id, file_id)).fetchone()
+        if not row:
+            return None
+        document_ref = row["document_ref"] or ""
+        filename = row["filename"] or os.path.basename(document_ref)
+        content_type = row["content_type"] or (
+            mimetypes.guess_type(document_ref)[0] or "application/octet-stream")
+    else:
+        return None
+    if not document_ref or not os.path.isfile(document_ref):
+        return None
+    return {
+        "path": document_ref,
+        "filename": filename,
+        "content_type": content_type,
+    }
+
+
 def page(title, body):
     return """<!doctype html>
 <html lang="en">
@@ -705,13 +825,22 @@ def render_case(st, cl, case_id, query=None):
             status = "accepted_with_note"
         else:
             status = "accepted"
+        file_cell = ""
+        if rec:
+            document_ref = rec.get("document_ref") or ""
+            file_cell = render_file_cell(
+                os.path.basename(document_ref) if document_ref else "",
+                document_ref,
+                file_action_links(
+                    case.id, "accepted", ev["id"],
+                    attached=bool(document_ref and os.path.exists(document_ref))))
         rows.append(
             "<tr><td>{label}</td><td><span class=\"status {cls}\">{status}</span></td>"
-            "<td>{ref}</td></tr>".format(
+            "<td>{file}</td></tr>".format(
                 label=esc(ev["label"]),
                 cls=status_class(status),
                 status=esc(status.replace("_", " ")),
-                ref=esc((rec or {}).get("document_ref", ""))))
+                file=file_cell or '<span class="meta">Missing.</span>'))
     slot_rows = "".join(
         "<tr><th>{}</th><td>{}</td></tr>".format(esc(k), esc(v))
         for k, v in sorted(case.slots.items()))
@@ -753,15 +882,20 @@ def render_case(st, cl, case_id, query=None):
         history_rows = '<tr><td colspan="4" class="meta">No review decisions yet.</td></tr>'
     review_message_rows = "".join(
         '<div class="timeline-item"><div class="meta">{time} · {sender}</div>'
-        '<div>{body}</div></div>'.format(
+        '<div class="reply-body">{body}</div></div>'.format(
             time=esc(row["created_at"]), sender=esc(row["from_addr"]),
-            body=esc(row["body"]))
+            body=esc(clean_reply_body(row["body"])))
         for row in review_messages)
     if not review_message_rows:
         review_message_rows = '<div class="meta">No human-review client replies yet.</div>'
     review_file_rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
-            esc(row["created_at"]), esc(row["filename"]), esc(row["evidence_id"] or ""),
+            esc(row["created_at"]),
+            render_file_cell(
+                row["filename"], row["document_ref"],
+                file_action_links(case.id, "review_file", row["id"],
+                                  attached=bool(row["document_ref"] and os.path.exists(row["document_ref"])))),
+            esc(row["evidence_id"] or ""),
             esc(row["document_ref"]))
         for row in review_files)
     if not review_file_rows:
@@ -896,10 +1030,16 @@ def render_material_selector(cl, case, st):
             '<input type="checkbox" name="material" value="{token}"{checked}>'
             '<div><div class="option-title">{label}</div>'
             '<div class="meta">{source} · {filename} · {availability}</div>'
-            '</div></label>'.format(
+            '{actions}</div></label>'.format(
                 token=esc(item["token"]), checked=checked, label=esc(item["label"]),
                 source=esc(source), filename=esc(item["filename"]),
-                availability=esc(availability)))
+                availability=esc(availability),
+                actions=file_action_links(
+                    case.id,
+                    "accepted" if item["source"] == "validated_checklist" else "review_file",
+                    item["evidence_id"] if item["source"] == "validated_checklist"
+                    else item["token"].split(":", 1)[1],
+                    attached=item.get("attached"))))
     return "".join(items)
 
 
@@ -920,6 +1060,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/file":
+            self._send_file(urllib.parse.parse_qs(parsed.query))
+            return
         if parsed.path not in ("/", "/index.html"):
             self.send_error(404)
             return
@@ -965,6 +1108,27 @@ class Handler(BaseHTTPRequestHandler):
         payload = html_body.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _send_file(self, query):
+        st = self._store()
+        cl = load_checklist()
+        case_id = (query.get("case") or [""])[0]
+        item = resolve_file_request(st, cl, case_id, query)
+        if not item:
+            self.send_error(404, "file not found")
+            return
+        mode = (query.get("mode") or ["preview"])[0]
+        disposition = "attachment" if mode == "download" else "inline"
+        filename = os.path.basename(item["filename"] or item["path"]).replace('"', "")
+        with open(item["path"], "rb") as fh:
+            payload = fh.read()
+        self.send_response(200)
+        self.send_header("Content-Type", item["content_type"])
+        self.send_header("Content-Disposition", '%s; filename="%s"' % (
+            disposition, filename))
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
