@@ -192,3 +192,22 @@ packs:
     - purpose_duration_and_activities
     - financial_resources_and_trip_cost
     - personal_circumstances_and_will_leave
+  human_review_continuation:
+    adviser_question: Please explain why your visit needs to last from 5 October 2026
+      to 3 January 2027, and how Chen Design Studio and your mother's care will be
+      managed while you are away. Please provide any documents already available that
+      support these arrangements.
+    client_reply: 'Dear Adviser,
+
+
+      Please find attached my Visit and Home Arrangements Statement. It explains the
+      purpose and timing of my 90-day visit, how Chen Design Studio will continue
+      operating in Shanghai, how my mother will be cared for, and when I will resume
+      in-person work after returning to China.
+
+
+      Kind regards,
+
+      Mei Ling Chen'
+    attachment: visit_and_home_arrangements_mei_ling_chen.pdf
+    expected_handling: human_review_only_no_automatic_reanalysis

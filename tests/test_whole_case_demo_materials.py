@@ -101,12 +101,33 @@ class TestWholeCaseDemoMaterials(unittest.TestCase):
             self.assertTrue(os.path.isfile(zip_path))
             expected_names = sorted(
                 ["README.md"] + [row["filename"] for row in pack["attachments"]])
+            continuation = pack.get("human_review_continuation") or {}
+            if continuation.get("attachment"):
+                expected_names.append(continuation["attachment"])
+                expected_names.sort()
             with zipfile.ZipFile(zip_path) as archive:
                 names = sorted(archive.namelist())
                 timestamps = set(info.date_time for info in archive.infolist())
             with self.subTest(pack=pack["id"]):
                 self.assertEqual(names, expected_names)
                 self.assertEqual(timestamps, {FIXED_ZIP_TIME})
+
+    def test_follow_up_pack_documents_human_review_continuation(self):
+        pack = next(row for row in self.manifest["packs"]
+                    if row["id"] == "needs_follow_up")
+        continuation = pack["human_review_continuation"]
+        self.assertEqual(
+            continuation["expected_handling"],
+            "human_review_only_no_automatic_reanalysis")
+        attachment_path = os.path.join(
+            FIXTURE_ROOT, pack["folder"], continuation["attachment"])
+        self.assertTrue(os.path.isfile(attachment_path))
+        readme_path = os.path.join(FIXTURE_ROOT, pack["folder"], "README.md")
+        with open(readme_path, encoding="utf-8") as fh:
+            readme = fh.read()
+        self.assertIn(continuation["adviser_question"], readme)
+        self.assertIn(continuation["client_reply"], readme)
+        self.assertIn(continuation["attachment"], readme)
 
     def _extract_pack(self, pack):
         fields_by_evidence = {}

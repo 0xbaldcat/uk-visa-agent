@@ -375,6 +375,71 @@ def generate_needs_follow_up():
         "the duration, financial-resources and home-country-commitments dimensions. "
         "They enter human review and are not automatically emailed to the client.",
     )
+
+    follow_up_filename = "visit_and_home_arrangements_mei_ling_chen.pdf"
+    adviser_question = (
+        "Please explain why your visit needs to last from 5 October 2026 to "
+        "3 January 2027, and how Chen Design Studio and your mother's care will "
+        "be managed while you are away. Please provide any documents already "
+        "available that support these arrangements."
+    )
+    client_reply = (
+        "Dear Adviser,\n\n"
+        "Please find attached my Visit and Home Arrangements Statement. It "
+        "explains the purpose and timing of my 90-day visit, how Chen Design "
+        "Studio will continue operating in Shanghai, how my mother will be cared "
+        "for, and when I will resume in-person work after returning to China.\n\n"
+        "Kind regards,\nMei Ling Chen"
+    )
+    readme_path = pack_dir / "README.md"
+    readme_path.write_text(
+        readme_path.read_text(encoding="utf-8") + """
+
+## Human-review continuation
+
+The PDF below is **not part of the initial eight-document submission**. Use it
+only after the case has entered human review.
+
+### Adviser follow-up question
+
+```text
+{question}
+```
+
+### Client reply
+
+```text
+{reply}
+```
+
+Attach `{filename}` to that reply. The reply text should appear under Human
+Review Client Replies and the PDF under Human Review Files. Whole-case analysis
+must not run again automatically; the adviser decides whether to ask again or
+include the new file in the final package.
+""".format(question=adviser_question, reply=client_reply,
+           filename=follow_up_filename),
+        encoding="utf-8",
+    )
+    write_text_pdf(
+        pack_dir / follow_up_filename,
+        "VISIT AND HOME ARRANGEMENTS STATEMENT",
+        [
+            "Applicant Name: Mei Ling Chen",
+            "Document Date: 2026-08-20",
+            "Trip Dates: 2026-10-05 to 2027-01-03",
+            "Visit Purpose: Extended family visit with sister Hui Chen",
+            "Planned Duration: 90 days",
+            "Reason: First extended visit with my sister in three years",
+            "October: Family time and local visits in Manchester",
+            "November: Family time and day trips in North West England",
+            "December: Christmas and New Year with my sister",
+            "Business: Chen Design Studio will remain active in Shanghai",
+            "Operations: Project coordinator Lin Zhao will manage daily client enquiries",
+            "UK Activity: I will not work or provide services while in the UK",
+            "Mother Care: Cousin Wei Chen will provide daily support in Shanghai",
+            "Return Plan: Resume in-person client work in Shanghai on 2027-01-06",
+        ],
+    )
     return {
         "id": "needs_follow_up", "label": "Adviser follow-up required",
         "folder": "needs-follow-up", "zip": "needs-follow-up.zip",
@@ -389,6 +454,12 @@ def generate_needs_follow_up():
                 "financial_resources_and_trip_cost",
                 "personal_circumstances_and_will_leave",
             ],
+        },
+        "human_review_continuation": {
+            "adviser_question": adviser_question,
+            "client_reply": client_reply,
+            "attachment": follow_up_filename,
+            "expected_handling": "human_review_only_no_automatic_reanalysis",
         },
     }
 
