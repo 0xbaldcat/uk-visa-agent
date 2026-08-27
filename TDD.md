@@ -124,38 +124,263 @@ files. Only approval creates the client PDF and final ZIP.
 - Automatic document authenticity or fraud determination.
 - Live use of unverified route scaffolds.
 
-## 4. System context
+## 4. System architecture
+
+### 4.1 Architectural style
+
+The PoC is a **single-repository modular monolith with three executable entry
+points**, not a set of networked microservices:
+
+- `demo.py` runs the workflow offline with in-memory adapters;
+- `email_poll_once.py` runs one live mailbox ingestion cycle; and
+- `admin_panel.py` runs the local adviser-review HTTP surface.
+
+The live entry points are separate OS processes. They coordinate through one
+SQLite database and a shared attachment directory; there is no in-process event
+bus or hidden conversational memory. Domain behavior is split into small modules
+under `src/`, while provider-specific email, OCR, and LLM behavior stays behind
+adapter seams.
+
+This shape is intentional for a two-day PoC: it keeps the full control contract
+visible and testable without introducing distributed-systems failure modes. The
+module boundaries are also the replacement seams for production infrastructure.
+
+### 4.2 Runtime topology and system context
 
 ```text
-                    +--------------------------+
-Client mailbox ---> | IMAP fetch / EmailPoller | ---> saved attachments
-       ^             +------------+-------------+
-       |                          |
-       |                          v
-       |             +--------------------------+
-       |             | Engine + state.next_action|
-       |             +-----+---------------+----+
-       |                   |               |
-       |                   v               v
-       |             rule/check code   optional LLM/OCR
-       |                   |               |
-       |                   +-------+-------+
-       |                           v
-       |                      SQLite Store
-       |                           |
-       |                           v
-       |                 local adviser panel
-       |                           |
-       +--------- SMTP <--- approve/follow-up
+                           external trust boundary
+   +------------------+                                  +------------------+
+   | Client mailbox   |<------------- SMTP ------------>| Mail provider    |
+   +--------+---------+                                  +--------+---------+
+            |                                                       |
+            | email + attachments                          unseen mail / IMAP
+            |                                                       |
+            v                                                       v
+   +--------------------------------------------------------------------------+
+   | email_poll_once.py                                                       |
+   |  EmailPoller -> Engine -> state/checklist/validators -> composer/router  |
+   +----------------------+----------------------+----------------------------+
+                          |                      |
+                          | optional candidate   | saved attachment bytes
+                          v                      v
+              +----------------------+   +-----------------------+
+              | LLM / Baidu OCR APIs |   | Attachment directory  |
+              +----------------------+   +-----------+-----------+
+                                                     |
+                          case state + traces         |
+                          v                           |
+                    +-----+---------------------------+-----+
+                    |               SQLite                 |
+                    +-----+---------------------------+-----+
+                          ^                           |
+                          | review/query              | known case file refs
+                          |                           v
+                    +-----+-------------------------------+
+                    | admin_panel.py                      |
+                    | adviser decision + package selection|
+                    +----------------+--------------------+
+                                     |
+                                     +------ SMTP reply / final ZIP ------> client
 ```
 
 All business behavior can run locally. SMTP/IMAP, Baidu OCR, and an
-OpenAI-compatible model endpoint are optional adapters.
+OpenAI-compatible model endpoint are optional external adapters. The offline demo
+replaces those adapters with deterministic in-memory implementations but uses the
+same state, checklist, validation, diagnosis, and delivery modules.
+
+### 4.3 Runtime roles
+
+| Runtime | Trigger | Reads | Writes | External side effects |
+|---|---|---|---|---|
+| Offline demo | Developer command | Config + synthetic scripted input | In-memory store | None |
+| Mailbox poller | One command or external scheduler tick | IMAP, config, SQLite, saved files | SQLite, attachment directory | SMTP reply; optional OCR/LLM calls |
+| Adviser panel | Local HTTP request | SQLite, config, case-known files | Review/notification rows in SQLite | SMTP follow-up or final ZIP |
+
+The PoC does not contain an internal scheduler. Repeated mailbox polling is an
+operational concern outside the application process. This prevents a local demo
+loop from being mistaken for a durable production worker.
+
+### 4.4 Logical layers and dependency direction
+
+```text
+Entrypoints / presentation
+  demo.py | email_poll_once.py | admin_panel.py
+                         |
+                         v
+Application orchestration
+  EmailPoller | Engine | adviser review actions
+                         |
+             +-----------+-----------+
+             v                       v
+Deterministic domain/control       Candidate interpretation
+  state, checklist, validate,        ingress, email_model,
+  diagnose, facts, compose,          document_extract, case_analysis
+  deliver                            optional LLM/OCR adapters
+             |                       |
+             +-----------+-----------+
+                         v
+Infrastructure
+  Store/SQLite | SMTP/IMAP channel | filesystem attachments
+```
+
+The important dependency rule is about **authority**, not only imports:
+
+- candidate interpretation may propose facts, fields, observations, or prose;
+- deterministic domain code decides whether those candidates are admissible;
+- only the workflow derives the next action and delivery contents; and
+- external adapters cannot transition a case or approve a package.
+
+`admin_panel.py` directly composes Store, delivery rendering, and SMTP helpers.
+That is a deliberate PoC shortcut. A production adviser application should move
+those operations behind authenticated application services and transaction
+boundaries.
+
+### 4.5 Control path versus candidate path
+
+The architecture separates an untrusted interpretation path from the trusted
+workflow control path:
+
+```text
+email text / document bytes
+          |
+          v
+local parser / OCR / optional LLM
+          |
+          v
+candidate JSON or candidate prose
+          |
+          v
+schema + allow-list + exact-reference + fabrication guards
+          |
+          v
+accepted persisted facts ------------------------------+
+                                                        |
+versioned route config + persisted case state ----------+
+                                                        v
+                                             state.next_action()
+                                                        |
+                                                        v
+                                         deterministic validation,
+                                         message/pack composition,
+                                         human-review gate
+```
+
+No prompt output feeds directly into a state transition, checklist requirement,
+validation pass, or client delivery. This is the central architecture mechanism
+behind the agent/workflow split described in section 2.
+
+### 4.6 Key sequence: inbound client email
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as Mail provider
+    participant P as EmailPoller
+    participant S as Store
+    participant E as Engine
+    participant X as OCR / LLM
+    participant R as SMTP channel
+    C->>M: Email text + attachments
+    M->>P: Unseen raw message
+    P->>S: Resolve case and persist thread context
+    P->>E: Apply text and mapped files
+    E->>S: Load persisted case
+    opt Optional interpretation needed
+        E->>X: Text/file + allowed schema
+        X-->>E: Candidate fields
+    end
+    E->>S: Save accepted facts, failures, and traces
+    E->>E: Derive next action
+    E->>R: One consolidated response
+    R-->>C: Threaded email
+    P->>M: Mark seen after processing
+```
+
+For a multi-attachment email, every mapped file is applied before the engine
+derives one final response. This batching boundary prevents one inbound email from
+creating a burst of contradictory intermediate replies.
+
+### 4.7 Key sequence: human review and final delivery
+
+```mermaid
+sequenceDiagram
+    participant E as Engine
+    participant S as Store
+    participant A as Adviser panel
+    participant M as Mail provider
+    participant C as Client
+    participant P as EmailPoller
+    E->>S: Save internal pack event and human_review stage
+    A->>S: Load case, pack, and available files
+    alt Adviser needs follow-up
+        A->>S: Save needs_client_follow_up decision
+        A->>M: Send threaded adviser message
+        M-->>C: Follow-up request
+        C->>M: Reply text / files
+        M->>P: Unseen reply
+        P->>S: Retain as human-review context
+    else Adviser approves
+        A->>S: Save decision and selected file tokens
+        A->>A: Render final PDF and ZIP
+        A->>M: Send final package
+        M-->>C: Threaded final delivery
+        A->>S: Save notification result
+    end
+```
+
+The adviser panel does not ask the model to approve a case. It records a human
+decision, and code deterministically builds the ZIP from that explicit selection.
+
+### 4.8 Data ownership and sources of truth
+
+| Data | Source of truth | Derived/read model | Must not become authority |
+|---|---|---|---|
+| Workflow stage and accepted intake | `cases` row in SQLite | Audit/admin rendering | Email transcript or model memory |
+| Required evidence and checks | Versioned route config | Composed `Checklist` | Model-generated requirement text |
+| Accepted document fields/failures | `cases.evidence` | QC/adviser pack | Raw OCR/LLM candidate JSON |
+| Original uploaded bytes | Case attachment directory | Admin preview/final selection | Filename alone |
+| Interpretation/check history | Trace and audit tables | Debug/review evidence | Chain-of-thought |
+| Adviser decision and file selection | `adviser_reviews` | Final PDF/ZIP | Automated completeness result |
+| Outbound delivery status | Outbox/notification rows | Operations inspection | SMTP call return without persistence |
+
+SQLite stores the small workflow snapshot needed to derive the next action.
+Attachments stay on disk and are referenced by case-known paths. Trace tables
+retain candidate and validation evidence without treating raw model reasoning as
+state.
+
+### 4.9 Trust boundaries
+
+| Boundary | Untrusted input | Architectural control |
+|---|---|---|
+| Client -> mailbox | Text, headers, filenames, attachment bytes | Case routing, de-duplication, filename mapping, schema checks |
+| Attachment -> extraction | File format, embedded text, OCR content | Allow-listed fields; unreadable becomes resupply; no parser result can approve |
+| LLM/OCR provider -> workflow | Candidate fields/observations/prose | Type/schema validation, exact fact refs, forbidden-language and fabrication guards |
+| Local file -> adviser browser | Requested path/query parameters | Only case-known evidence/review-file identifiers resolve |
+| Adviser -> client delivery | Decision, note, selected file tokens | Allowed decisions, stored selection, sanitized unique ZIP names |
+
+The local admin panel itself is inside the trusted PoC environment and has no
+authentication. Section 15 records why it must become an authenticated boundary
+before any real-client deployment.
+
+### 4.10 Production replacement seams
+
+| PoC component | Production replacement | Contract to preserve |
+|---|---|---|
+| Poll-once command | Durable mailbox/event worker | Idempotent inbound application and one consolidated response |
+| SQLite Store | Managed relational database | Persisted state remains the only workflow truth |
+| Local attachment directory | Encrypted scanned object storage | Immutable case-bound file references |
+| Direct SMTP/IMAP | Provider adapter + transactional delivery worker | Thread identity, de-duplication, send outcome trace |
+| Local admin panel | Authenticated adviser application/service | Human decision and explicit package selection |
+| Direct OCR/LLM HTTP call | Observable provider gateway | Candidate-only authority, timeouts, fallback, trace |
+
+These seams allow infrastructure to change without moving requirements,
+transitions, validation, package contents, or approval authority into a model.
 
 ## 5. Component map
 
 | Component | Responsibility |
 |---|---|
+| `demo.py` | Offline deterministic end-to-end workflow walkthrough |
 | `email_poll_once.py` | Compose live adapters, fetch unseen mail, process, then mark seen |
 | `admin_panel.py` | Local adviser list/detail UI, file access, review decisions, client notification, final ZIP |
 | `src/email_bridge.py` | Parse RFC822 mail, resolve case, de-duplicate, save attachments, batch one response |
