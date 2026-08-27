@@ -221,9 +221,7 @@ button:disabled {
 
 
 def default_db_path():
-    return os.environ.get("VISA_AGENT_DB_PATH") or (
-        "live-panwei.sqlite3" if os.path.exists(os.path.join(ROOT, "live-panwei.sqlite3"))
-        else "visa-agent.sqlite3")
+    return os.environ.get("VISA_AGENT_DB_PATH", "visa-agent.sqlite3")
 
 
 def load_store(db_path):
@@ -292,8 +290,6 @@ def load_email_settings(to_addr):
         "VISA_AGENT_SMTP_PORT": "587",
         "VISA_AGENT_IMAP_HOST": "imap.gmail.com",
         "VISA_AGENT_IMAP_PORT": "993",
-        "VISA_AGENT_EMAIL_USER": "visa.agent.demo@gmail.com",
-        "VISA_AGENT_FROM_EMAIL": "visa.agent.demo@gmail.com",
     }
     for key, value in defaults.items():
         os.environ.setdefault(key, value)

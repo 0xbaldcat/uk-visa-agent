@@ -32,6 +32,14 @@ python3 -m unittest discover -s tests
 The demos are deterministic and run without external services. Test materials are
 synthetic and live under `fixtures/`.
 
+### Five-minute reviewer path
+
+1. Run `python3 demo.py --email-only` to see the complete workflow without accounts.
+2. Open [the engineering explainer](docs/engineering-explainer.html) for the
+   product flow and production roadmap.
+3. Read [TDD.md](TDD.md) for design decisions and implementation contracts.
+4. Inspect the two whole-case fixture packs described below.
+
 ## How the system works
 
 ```text
@@ -60,7 +68,9 @@ implementation details.
 ## Live email walkthrough
 
 Use a dedicated test mailbox and an app-specific password. Do not use a personal
-primary mailbox.
+primary mailbox. [.env.example](.env.example) is a reference list; export the
+values needed by the command you are running. Populated `.env` files are ignored
+by Git and must not be committed.
 
 ```bash
 export VISA_AGENT_SMTP_HOST=smtp.gmail.com
@@ -157,11 +167,42 @@ Practice such as a commonly requested statement period is marked `advisory` and
 cannot block delivery as if it were law. Volatile data is dated rather than
 hardcoded.
 
+## Synthetic demo material
+
+All committed applicant identities and documents are synthetic.
+
+- `fixtures/whole-case-demo/no-issue.zip` is an employed, self-funded case that
+  reaches human review with zero proposed follow-up questions.
+- `fixtures/whole-case-demo/needs-follow-up.zip` is a longer family-visit,
+  self-employed case that produces adviser follow-up questions. Its expanded
+  directory also contains one post-review continuation document.
+- `fixtures/realistic-materials/` is a pass/fail/cross-document validation matrix
+  used by the regression suite.
+
+The expanded whole-case directories are intentionally kept beside their ZIP files
+so reviewers can inspect individual files and tests can verify that the archives
+stay reproducible.
+
+## Repository map
+
+```text
+README.md, TDD.md       project entry point and technical design
+config/                 route composition, rules, sources, analysis rubric
+src/                    workflow, extraction, validation, delivery, persistence
+tests/                  deterministic regression suite
+fixtures/               synthetic document and whole-case material packs
+scripts/                fixture generators and optional real-model smoke test
+docs/                   product research, rule explanations, engineering explainer
+demo.py                 offline end-to-end walkthrough
+email_poll_once.py      one live mailbox processing cycle
+admin_panel.py          local human-review UI
+```
+
 ## Documentation
 
 - [Technical design document](TDD.md) — design decisions and implementation
 - [Engineering explainer](docs/engineering-explainer.html)
-- [Research and product context](docs/visa-agent-poc-research.md)
+- [Historical research and product context](docs/visa-agent-poc-research.md)
 - [Materials checklist](docs/materials-checklist.md)
 - [Material validation rules](docs/material-validation-rules.md)
 - [Whole-case analysis rubric](docs/case-analysis-rubric.md)

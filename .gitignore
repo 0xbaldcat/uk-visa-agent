@@ -2,12 +2,18 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
+venv/
 
 .idea/
+.env
+.env.*
+!.env.example
 .local-live.env
 .local-live-poller.sh
 *.sqlite
 *.sqlite3
 *.log
 *.pid
+inbound-attachments/
 inbound-live-attachments/
