@@ -1,52 +1,66 @@
 # UK Visitor Visa Preparation Agent — PoC
 
-A WhatsApp/email agent that walks a client through preparing a UK Standard Visitor
-application, the way a human consultant would: it interviews, spots the weak points
-in the case, chases the right documents, checks what arrives, and assembles a pack.
+An email/WhatsApp-style agent that helps a client prepare a UK Standard Visitor
+application pack. It collects intake facts, requests route-specific evidence,
+extracts and validates uploaded documents, prepares an adviser review pack, and
+returns the adviser-approved materials as a ZIP file.
 
-It does **not** submit the application — the Home Office has no third-party
-submission API, so that step is permanently the applicant's own.
+The agent does **not** submit an application, predict the visa outcome, or decide
+that the evidence is sufficient. Those boundaries are enforced in code, not left
+to a model prompt.
 
-## Run it
+## Current scope
+
+- Product scope: UK Standard Visitor.
+- Verified PoC route: family visit with a settled UK relative
+  (`visitor_family_visit`).
+- Scaffold-only routes: tourism and business. They are marked unverified and must
+  not be treated as live rule packs.
+- Primary live channel: email over SMTP/IMAP. WhatsApp behavior is represented in
+  the offline demo, including its 24-hour reply-window constraint.
+- Human review is mandatory before the final client package is sent.
+
+## Quick start
 
 ```bash
 python3 -m pip install -r requirements.txt
-python3 demo.py                              # WhatsApp + email walkthrough
-python3 demo.py --email-only                 # fallback demo if WhatsApp is unavailable
-python3 -m unittest discover -s tests        # full regression suite
+python3 demo.py
+python3 demo.py --email-only
+python3 -m unittest discover -s tests
 ```
 
-The model seam is stubbed, so the demo is offline and deterministic.
+The demos are deterministic and run without external services. Test materials are
+synthetic and live under `fixtures/`.
 
-The live email path can optionally use an OpenAI-compatible LLM for natural
-language intake parsing. LLM output is treated as candidate structure: schema
-validation accepts valid fields, rejects invalid fields, and may perform one
-bounded repair attempt. The trace is recorded in `ingress_events`.
+## How the system works
 
-The review pack also includes a whole-case analysis layer: code prepares a fact
-context, an optional model may propose evidence-backed observations, and code
-rejects observations with missing references or outcome/sufficiency claims.
+```text
+Client email
+  -> parse and de-duplicate
+  -> resolve or create case
+  -> collect structured intake facts
+  -> derive required evidence from versioned rules
+  -> save attachments and extract fields
+  -> run deterministic document checks
+  -> request missing/replacement evidence
+  -> build evidence-backed whole-case adviser notes
+  -> human review and file selection
+  -> email one ZIP containing the final report and selected files
+```
 
-Routes are composed from versioned rule packs rather than copied per scenario.
-`config/routes.yaml` maps a route to shared Standard Visitor core rules, one or
-more purpose packs, and reusable applicant profile packs. The current verified
-reference scenario is `visitor_family_visit`; tourism and business are scaffold
-routes that show the extension shape but remain unverified until their sources,
-fixtures and adviser SOP are added.
+SQLite is the source of truth. The next action is derived from persisted case
+state by `src/state.py`; an LLM never chooses the workflow transition. Optional
+LLM adapters may interpret natural-language intake, extract missing document
+fields, draft guarded narrative, and propose whole-case observations. Their
+outputs are candidate data that must pass schema, reference, and policy checks.
 
-## Documentation
+See [TDD.md](TDD.md) for the design decisions, architecture, data flow, and
+implementation details.
 
-- [Engineering explainer](docs/engineering-explainer.html)
-- [Research and design](docs/visa-agent-poc-research.md)
-- [Materials checklist](docs/materials-checklist.md)
-- [Material validation rules](docs/material-validation-rules.md)
-- [Attachment extraction interface](docs/attachment-extraction.md)
-- [Synthetic PDF/DOCX/image test materials](fixtures/realistic-materials/README.md)
+## Live email walkthrough
 
-## Live Email Smoke
-
-For a real mailbox walkthrough, use a dedicated test mailbox with SMTP, IMAP and
-an app-specific password. Do not use a personal primary mailbox.
+Use a dedicated test mailbox and an app-specific password. Do not use a personal
+primary mailbox.
 
 ```bash
 export VISA_AGENT_SMTP_HOST=smtp.gmail.com
@@ -57,94 +71,106 @@ export VISA_AGENT_EMAIL_USER=visa-agent-demo@example.com
 export VISA_AGENT_EMAIL_PASSWORD='app-specific-password'
 export VISA_AGENT_FROM_EMAIL=visa-agent-demo@example.com
 export VISA_AGENT_TO_EMAIL=client-test@example.com
-
-python3 real_email_demo.py
-```
-
-Set `VISA_AGENT_FETCH_UNSEEN=1` to also list unread replies from the test client
-mailbox after sending. The workflow assembles a human-readable adviser review
-pack, but the customer-facing completion email does not attach it before human
-review.
-
-For a real multi-turn mailbox path, run one poll cycle after sending an email to
-the agent mailbox:
-
-```bash
-export VISA_AGENT_CASE_ID=case-001
 export VISA_AGENT_DB_PATH=visa-agent.sqlite3
 export VISA_AGENT_ATTACHMENT_DIR=inbound-attachments
+
 python3 email_poll_once.py
 ```
 
-`email_poll_once.py` fetches unseen raw messages, de-duplicates by RFC
-`Message-ID`, resolves the case from `[visa-agent:<case-id>]` or reply headers,
-and creates a new case when a first-contact email has no known thread mapping.
-Then it saves attachment bytes, routes the body and attachments through `Engine`,
-and sends the next agent response by SMTP. `VISA_AGENT_CASE_ID` is optional; set
-it only when you deliberately want all unmatched mail to go into one demo case.
-For the local no-LLM demo, attach real files whose names start with the checklist
-evidence id, such as `passport.pdf`, `bank_statements.docx`, or
-`home_ties_evidence.jpg`.
+`email_poll_once.py` fetches unseen messages, routes each message to a case using
+the subject case token and RFC reply headers, processes all mapped attachments,
+sends at most one workflow response for the email, and marks the message seen.
+An unmatched first-contact email creates a case automatically.
 
-Live email limitations for the two-day PoC: the deterministic email model parses
-plain-text replies for the current expected slot and extracts fields from text
-PDFs, DOCX/text files, JSON developer shortcuts, and OCR sidecars. Scanned PDFs
-and images need a real OCR adapter; the adapter seam is
-`document_extract.DocumentTextExtractor`.
+`VISA_AGENT_CASE_ID` is an optional demo override that sends otherwise unmatched
+mail to one fixed case. Leave it unset for normal multi-case behavior.
 
-## Local Adviser Admin Panel
+### Optional document OCR
 
-Completed cases enter `human_review`. The local admin panel shows those cases,
-the collected facts and materials, the internal adviser review pack, and a simple
-review decision form.
+Text PDFs, DOCX, and text files are parsed locally. Images and scanned PDFs can
+use the Baidu OCR adapter:
 
 ```bash
-python3 admin_panel.py --db live-panwei.sqlite3 --port 8765
+export VISA_AGENT_BAIDU_OCR_API_KEY='...'
+export VISA_AGENT_BAIDU_OCR_SECRET_KEY='...'
 ```
 
-Open <http://127.0.0.1:8765>. Decisions are written to `adviser_reviews` and the
-case audit trail. This is a PoC review surface, not an authenticated production
-admin app.
+OCR sidecar files remain available for deterministic fixtures; live clients do
+not need to provide them.
 
-## The demo case
+### Optional OpenAI-compatible LLM
 
-Deliberately a hard one: a self-employed applicant, funds only just adequate, a
-sister settled in Manchester, asking for a 90-day stay. The agent spots the cluster
-(settled UK relative + irregular income + long stay + thin evidenced ties) and asks
-for strengthening evidence instead of just filing what it is handed. It also
-catches an air ticket in the wrong name and sends it back.
+```bash
+export VISA_AGENT_LLM_API_KEY='...'
+export VISA_AGENT_LLM_MODEL='deepseek-v4-flash'
+export VISA_AGENT_LLM_BASE_URL='https://api.deepseek.com'
+```
 
-The walkthrough shows: intake, webhook de-duplication, risk diagnosis, a blocking
-validation failure, the WhatsApp 24-hour window forcing a template fallback,
-remediation, the computed QC report, the fabrication guard blocking invented
-figures, the review pack, and the human review gate.
+With these variables set, the same adapter is available for natural-language
+intake and missing document-field extraction. The deterministic parser remains
+the fallback. To enable model-generated whole-case adviser observations, opt in
+separately:
 
-## Design
+```bash
+export VISA_AGENT_CASE_ANALYSIS_LLM=1
+export VISA_AGENT_CASE_ANALYSIS_LLM_MODEL='deepseek-v4-pro'
+```
 
-See **[DESIGN.md](DESIGN.md)** — covers the agent-vs-workflow split per stage and
-the six delivery-stability failure modes with the control and test for each.
+If the model is unavailable or produces an invalid candidate, the workflow keeps
+accepted facts, rejects unsupported output, and either uses deterministic
+whole-case observations or asks for clarification.
 
-Two sentences of it:
+## Adviser admin panel
 
-> Missing a document costs a refusal, a non-refundable fee and a mark on the
-> applicant's history; asking one extra question costs nothing. When cost is that
-> asymmetric, deterministic structure holds control and the model works at the edges.
+Cases with complete, passing required evidence enter `human_review`.
 
-> **Model extracts and phrases; code judges and delivers.**
+```bash
+python3 admin_panel.py --db visa-agent.sqlite3 --port 8765
+```
 
-## What the agent will not do
+Open <http://127.0.0.1:8765>. The reviewer can inspect accepted materials,
+preview or download case files, send a follow-up message, or approve a selected
+set of files. Approval emails exactly one archive:
 
-It reports whether evidence is **present and well-formed**. It never rules on
-whether a case is **strong enough** — the genuine visitor test has no hard standard,
-so a sufficiency verdict would be unverifiable and, if wrong, expensive for the
-client. Strength is the human reviewer's call. There is no scoring field in the
-schema, and a test asserts none appears.
+```text
+visa-reviewed-materials-package.zip
+├── visa-final-review-report.pdf
+└── materials/
+    └── <reviewer-selected files>
+```
 
-## Provenance
+This panel is a local PoC surface. It has no production authentication,
+authorization, encryption-at-rest, retention policy, or malware-scanning gateway.
 
-Every requirement carries a source id resolving to a GOV.UK URL in
-`config/sources.yaml`. Anything unsourced is listed in the QC report. Practitioner
-practice (e.g. "six months of statements") is marked `advisory` and never enforced
-as law — it is reported with different wording and does not block delivery.
+## Rule and evidence data
 
-Volatile values — fees, processing times — are dated data, never hardcoded.
+Rules are composed rather than copied per scenario:
+
+- `config/routes.yaml` selects the route components.
+- `config/standard_visitor_core.yaml` holds shared Standard Visitor rules.
+- `config/purposes/` holds purpose-specific packs.
+- `config/applicant_financial_home_profile.yaml` holds reusable profile rules.
+- `config/sources.yaml` resolves requirement source IDs to GOV.UK URLs.
+- `config/case_analysis_rubric.yaml` constrains whole-case adviser observations.
+
+Practice such as a commonly requested statement period is marked `advisory` and
+cannot block delivery as if it were law. Volatile data is dated rather than
+hardcoded.
+
+## Documentation
+
+- [Technical design document](TDD.md) — design decisions and implementation
+- [Engineering explainer](docs/engineering-explainer.html)
+- [Research and product context](docs/visa-agent-poc-research.md)
+- [Materials checklist](docs/materials-checklist.md)
+- [Material validation rules](docs/material-validation-rules.md)
+- [Whole-case analysis rubric](docs/case-analysis-rubric.md)
+- [Attachment extraction interface](docs/attachment-extraction.md)
+- [Synthetic material guide](fixtures/realistic-materials/README.md)
+
+## Safety boundary
+
+The system reports whether required evidence is present, readable, and consistent
+with explicit checks. It may surface evidence-backed questions for an adviser. It
+does not score the case, estimate approval odds, or claim that the genuine visitor
+test is met. The final decision on case strength belongs to the human reviewer.
