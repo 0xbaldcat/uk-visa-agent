@@ -34,6 +34,12 @@ email bridge maps it automatically.
 
 All eight required documents should pass document QC. The deterministic whole-case fallback should produce **3 adviser follow-up questions**, in the duration, financial-resources and home-country-commitments dimensions. They enter human review and are not automatically emailed to the client.
 
+Regenerate both whole-case directories and ZIP files with:
+
+```bash
+python3 scripts/generate_whole_case_demo_materials.py
+```
+
 
 ## Human-review continuation
 

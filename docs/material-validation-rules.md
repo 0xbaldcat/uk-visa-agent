@@ -1,11 +1,15 @@
 # 英国访客签证 PoC：材料判定规则清单
 
-更新时间：2026-08-22  
-适用范围：Standard Visitor，探亲访问 + 英国定居亲属场景  
-规则版本：`visitor_family_visit` / `1.0.0`
+更新时间：2026-08-27
 
-这份文件把 `config/visitor_family_visit.yaml` 与 `src/validate.py` 中当前实际执行的
-判定规则翻译成人可读清单。模型只抽字段；下面的判断由代码完成。
+产品范围：UK Standard Visitor
+
+已验证参考路线：`visitor_family_visit` / `1.1.0`
+
+这份文件把 `config/routes.yaml` 组合的 Standard Visitor core、
+`purposes/family_visit`、applicant profile rule pack 与 `src/validate.py`
+中当前实际执行的判定规则翻译成人可读清单。模型只提出字段 candidate；
+下面的判断由代码完成。
 
 ## 一、判定结果怎么解释
 
@@ -157,4 +161,3 @@
 2. 材料之间是否存在代码尚未覆盖的语义矛盾；
 3. 模板生成内容是否只引用客户已提供事实；
 4. 最终交付没有被误读为成功率预测或申请提交。
-

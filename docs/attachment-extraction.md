@@ -21,7 +21,8 @@ pipeline is:
 Input:
 
 - `path`: local saved attachment path
-- `wanted_fields`: checklist field ids from `config/visitor_family_visit.yaml`
+- `wanted_fields`: field ids from the route components selected by
+  `config/routes.yaml`
 
 Output:
 

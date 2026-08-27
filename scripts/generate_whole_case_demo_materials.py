@@ -73,6 +73,12 @@ email bridge maps it automatically.
 ## Expected result
 
 {expected}
+
+Regenerate both whole-case directories and ZIP files with:
+
+```bash
+python3 scripts/generate_whole_case_demo_materials.py
+```
 """.format(title=title, scenario=scenario, subject=subject, body=body,
            files=files, expected=expected)
     (pack_dir / "README.md").write_text(content, encoding="utf-8")

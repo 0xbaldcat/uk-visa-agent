@@ -1,11 +1,12 @@
 """Deliverable assembly.
 
-All four deliverables are rendered by code from validated case fields. The model
-never writes a deliverable; at most it supplies prose for narrative paragraphs of
-the cover letter, and even that is passed through the fabrication guard first.
+The adviser review pack is rendered by code from validated case fields. Its five
+sections are the document checklist, form answers, cover-letter draft, QC report,
+and whole-case analysis. The model never writes the pack; at most it supplies
+candidate prose or observations that pass the relevant guards first.
 
-This is failure mode 3 from the design notes: if the model writes the pack, the
-completeness statement becomes an opinion. Here it is a computation.
+This enforces the TDD boundary: if the model writes the pack, the completeness
+statement becomes an opinion. Here it is a computation.
 """
 from datetime import date
 from typing import Dict, Any, List, Optional
@@ -224,7 +225,7 @@ def qc_report(checklist, case, today=None):
 
 
 def build_pack(checklist, case, narrative=None, today=None, model=None):
-    """All four deliverables."""
+    """Build the five governed sections of the internal adviser review pack."""
     return {
         "document_checklist": document_checklist(checklist, case),
         "form_answers": form_answers(checklist, case),

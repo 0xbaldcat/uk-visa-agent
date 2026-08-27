@@ -31,3 +31,9 @@ email bridge maps it automatically.
 ## Expected result
 
 All six required documents should pass document QC. The deterministic whole-case fallback should produce **0 observations and 0 follow-up questions**. The case still enters human review; the adviser may confirm the selected files and package them without inventing a question.
+
+Regenerate both whole-case directories and ZIP files with:
+
+```bash
+python3 scripts/generate_whole_case_demo_materials.py
+```

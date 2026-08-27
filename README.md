@@ -130,6 +130,12 @@ If the model is unavailable or produces an invalid candidate, the workflow keeps
 accepted facts, rejects unsupported output, and either uses deterministic
 whole-case observations or asks for clarification.
 
+To exercise only the optional real-model whole-case seam with synthetic facts:
+
+```bash
+python3 scripts/real_case_analysis_smoke.py
+```
+
 ## Adviser admin panel
 
 Cases with complete, passing required evidence enter `human_review`.
